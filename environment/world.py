@@ -130,11 +130,14 @@ class World:
             # 获取两地之间的距离作为动画时长
             distance = self.layout.get_distance(current_location, target_location)
             # 确保distance是数字类型，并且处理None情况
-            try:
-                duration = float(distance) * 0.5 if distance is not None else 1.0  # 距离越大，动画时间越长
-            except (TypeError, ValueError):
-                # 如果distance不能转换为float，使用默认值
-                duration = 1.0
+            if distance is None:
+                duration = 1.0  # 默认动画时长
+            else:
+                try:
+                    duration = float(distance) * 0.5  # 距离越大，动画时间越长
+                except (TypeError, ValueError):
+                    # 如果distance不能转换为float，使用默认值
+                    duration = 1.0
             self.visualizer.move_agent(agent_id, target_location, duration)
         
         # 添加移动记忆

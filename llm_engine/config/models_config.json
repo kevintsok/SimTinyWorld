@@ -1,0 +1,89 @@
+{
+  "qwen": {
+    "models": {
+      "qwen-plus": {
+        "max_tokens": 4096,
+        "temperature": 0.8,
+        "top_p": 0.9,
+        "description": "通义千问日常对话模型"
+      },
+      "qwen-max": {
+        "max_tokens": 6144,
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "description": "通义千问高级对话模型"
+      },
+      "qwen-turbo": {
+        "max_tokens": 2048,
+        "temperature": 0.85,
+        "top_p": 0.9,
+        "description": "通义千问快速响应模型"
+      }
+    },
+    "embedding_models": {
+      "text-embedding-v3": {
+        "dimensions": 1024,
+        "description": "通义千问文本嵌入模型"
+      }
+    },
+    "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  },
+  "openai": {
+    "models": {
+      "gpt-3.5-turbo": {
+        "max_tokens": 4096,
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "description": "OpenAI GPT-3.5 模型"
+      },
+      "gpt-4": {
+        "max_tokens": 8192,
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "description": "OpenAI GPT-4 模型"
+      },
+      "gpt-4-turbo": {
+        "max_tokens": 16384,
+        "temperature": 0.7,
+        "top_p": 0.95,
+        "description": "OpenAI GPT-4 Turbo 模型"
+      }
+    },
+    "embedding_models": {
+      "text-embedding-ada-002": {
+        "dimensions": 1536,
+        "description": "OpenAI 文本嵌入模型"
+      },
+      "text-embedding-3-small": {
+        "dimensions": 1536,
+        "description": "OpenAI 小型文本嵌入模型"
+      },
+      "text-embedding-3-large": {
+        "dimensions": 3072,
+        "description": "OpenAI 大型文本嵌入模型"
+      }
+    }
+  },
+  "deepseek": {
+    "models": {
+      "deepseek-chat": {
+        "max_tokens": 4096,
+        "temperature": 0.8,
+        "top_p": 0.9,
+        "description": "深度求索对话模型"
+      },
+      "deepseek-coder": {
+        "max_tokens": 8192,
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "description": "深度求索代码模型"
+      }
+    },
+    "embedding_models": {
+      "text-embedding": {
+        "dimensions": 1024,
+        "description": "深度求索文本嵌入模型"
+      }
+    }
+  }
+} 

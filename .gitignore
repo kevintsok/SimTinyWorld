@@ -33,5 +33,9 @@ ENV/
 
 # Project specific
 config/api_keys.txt
-agents/
-*.log 
+agents/history/
+*.log
+
+# 忽略API密钥文件
+llm_engine/config/api_keys.json
+config/api_keys.json 

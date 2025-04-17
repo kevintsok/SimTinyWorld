@@ -38,6 +38,15 @@ class BaseAgent:
         self.long_term_memory: List[str] = []
         self.short_term_memory: List[str] = []
         
+        # 设置记忆容量限制
+        self.max_short_term_memories = 50  # 短期记忆条目上限
+        self.max_long_term_memories = 200   # 长期记忆条目上限
+        
+        # 计划和状态
+        self.daily_plan = []  # 每日计划列表
+        self.status = "休息中"  # 当前状态
+        self.current_plan_index = 0  # 当前执行的计划索引
+        
         # 初始化存储目录
         self.memory_dir = f"agent/history/{self.id}"
         os.makedirs(self.memory_dir, exist_ok=True)
@@ -51,6 +60,9 @@ class BaseAgent:
         
         # 生成外貌描述
         self.appearance = self._generate_appearance()
+        
+        # 初始化财富属性
+        self.wealth = self._generate_wealth()
         
         # 如果文件存在，加载记忆
         self._load_memories()
@@ -207,7 +219,38 @@ class BaseAgent:
             if os.path.getsize(self.shortterm_file) > 0:
                 f.write("\n")
             f.write(content)
+            
+        # 更新内存中的短期记忆
+        self.short_term_memory.append(content)
+        
+        # 管理短期记忆容量
+        self._manage_short_term_memory()
     
+    def _manage_short_term_memory(self):
+        """管理短期记忆容量，确保不超过最大限制"""
+        # 如果短期记忆超过最大限制，删除最早的记忆
+        if len(self.short_term_memory) > self.max_short_term_memories:
+            # 保留最新的记忆
+            self.short_term_memory = self.short_term_memory[-self.max_short_term_memories:]
+            
+            # 更新短期记忆文件
+            with open(self.shortterm_file, "w", encoding="utf-8") as f:
+                f.write("\n".join(self.short_term_memory))
+    
+    def _manage_long_term_memory(self):
+        """管理长期记忆容量，确保不超过最大限制"""
+        # 如果长期记忆超过最大限制，删除最早的记忆
+        if len(self.long_term_memory) > self.max_long_term_memories:
+            # 保留最新的记忆
+            self.long_term_memory = self.long_term_memory[-self.max_long_term_memories:]
+            
+            # 更新长期记忆文件
+            with open(self.longterm_file, "w", encoding="utf-8") as f:
+                f.write("\n".join(self.long_term_memory))
+            
+            # 更新向量存储
+            self._update_vector_store()
+            
     def _save_to_long_memory(self, content: str):
         """保存记忆到长期记忆文件，以纯文本格式"""
         # 将记忆以纯文本格式追加到长期记忆文件末尾
@@ -216,8 +259,8 @@ class BaseAgent:
                 f.write("\n")
             f.write(content)
     
-    def query_memory(self, query: str) -> str:
-        """根据提供的查询生成回复，支持真实LLM和模拟模式
+    def respone(self, query: str) -> str:
+        """根据提供的查询生成回复，结合当前状态和角色特点
         
         Args:
             query: 查询/提示文本
@@ -265,6 +308,22 @@ class BaseAgent:
         
         mbti_traits = mbti_descriptions.get(self.mbti, "独特的性格特点")
         
+        # 状态相关的行为和情绪特点
+        status_traits = {
+            "工作中": "专注、严谨、思考型、寻求效率、解决问题导向",
+            "放松中": "轻松、开放、情绪平和、随意、乐于交流",
+            "用餐中": "愉快、社交、分享、放松、感官享受",
+            "社交中": "友好、热情、互动、关注他人、外向",
+            "观察中": "好奇、细心、分析、安静、思考",
+            "探索中": "冒险、好奇、主动、寻求新知、兴奋",
+            "休息中": "平静、内省、恢复能量、放松、舒适",
+            "学习中": "专注、好奇、分析、吸收新知、积极思考",
+            "活动中": "精力充沛、积极、投入、专注、执行导向"
+        }
+        
+        # 获取当前状态的特点，如果状态不在预定义列表中，则使用通用描述
+        status_trait = status_traits.get(self.status, "处于当前状态的特点")
+        
         # 构建提示模板
         prompt = f"""基于以下信息，以{self.name}({self.mbti})的身份生成回应：
 
@@ -276,6 +335,7 @@ class BaseAgent:
 - 来自: {self.background['hometown']}
 - 教育: {self.background['education']}
 - 外貌: {self.appearance}
+- 当前状态: {self.status}，表现特点: {status_trait}
 
 长期记忆中的相关信息：
 {context}
@@ -287,19 +347,20 @@ class BaseAgent:
 
 回应要求：
 1. 你必须完全根据{self.name}的性格({self.mbti})和背景进行回答
-2. 回答应当展现出{mbti_traits}的特质
-3. 避免任何形式的重复套话或通用问候
-4. 避免简单自我介绍（如"你好，我是XXX"）
-5. 在回答中适当提及环境或场景的特点
-6. 展现出对当前情境的感知和情绪反应
-7. 如果对话发生在特定场所，表现出对该场所的了解和反应
+2. 回答应当体现当前状态({self.status})下的情绪和行为特点
+3. 回答应当展现出{mbti_traits}的特质
+4. 避免任何形式的重复套话或通用问候
+5. 避免简单自我介绍（如"你好，我是XXX"）
+6. 在回答中适当提及环境或场景的特点
+7. 展现出对当前情境的感知和情绪反应
+8. 如果对话发生在特定场所，表现出对该场所的了解和反应
 
 语言要求：
 - 回答长度应为20-40字，既不过短也不冗长
 - 语言自然流畅，符合日常对话风格
 - 表达要有个性，让人感觉是真实的{self.name}在说话
 
-请现在以{self.name}的身份生成回应：
+请现在以{self.name}({self.status})的身份生成回应：
 """
         
         # 使用LLM引擎生成回答
@@ -308,9 +369,10 @@ class BaseAgent:
         # 确保返回有效字符串
         if response is None or response.strip() == "":
             # 使用更简化的提示重试
-            simplified_prompt = f"""作为{self.name}，一个{self.background['gender']}性{self.background['age']}岁{self.background['occupation']}，请生成一句对话回应。
+            simplified_prompt = f"""作为{self.name}，一个{self.background['gender']}性{self.background['age']}岁{self.background['occupation']}，目前状态是{self.status}，请生成一句对话回应。
 
 你的MBTI类型是{self.mbti}，主要特点是{mbti_traits}。
+当前状态({self.status})的表现特点: {status_trait}
 你需要回应的内容是: {query}
 
 请注意：
@@ -319,6 +381,7 @@ class BaseAgent:
 3. {'表现得外向、积极、社交' if self.mbti.startswith('E') else '表现得内向、深思熟虑、独立'}
 4. 回答必须在20-40字之间，简洁自然
 5. 必须用第一人称，像真实对话一样
+6. 体现当前状态({self.status})的特点
 
 直接生成回应，不要加任何前缀或格式："""
             
@@ -327,7 +390,7 @@ class BaseAgent:
             
             # 如果仍然失败，尝试更简单的提示
             if response is None or response.strip() == "":
-                minimal_prompt = f"你是{self.name}，请对'{query}'做出不超过20字的自然回应。"
+                minimal_prompt = f"你是{self.name}，正在{self.status}，请对'{query}'做出不超过20字的自然回应。"
                 response = self.llm_engine.generate(minimal_prompt)
                 
                 # 最后一次尝试
@@ -336,6 +399,11 @@ class BaseAgent:
                     response = self.llm_engine.generate(final_prompt)
         
         return response.strip() if response else ""
+
+    # 兼容性保持 - 旧方法指向新方法
+    def query_memory(self, query: str) -> str:
+        """为兼容性保留的方法，重定向到respone方法"""
+        return self.respone(query)
 
     def save_identity(self, directory: str = "agent/history"):
         """保存智能体的身份信息到指定目录
@@ -354,6 +422,7 @@ class BaseAgent:
             "mbti": self.mbti,
             "background": self.background,
             "appearance": self.appearance,
+            "wealth": self.wealth,
             "creation_time": time.time()
         }
         
@@ -399,6 +468,15 @@ class BaseAgent:
             # 初始化LLM引擎，用于生成外貌
             agent.llm_engine = LLMEngineFactory.create_engine(llm_kwargs.get("llm_engine_type", "qwen"), **llm_kwargs)
             agent.appearance = agent._generate_appearance()
+            
+        # 加载财富信息
+        if "wealth" in identity:
+            agent.wealth = identity["wealth"]
+        else:
+            # 初始化LLM引擎，用于生成财富
+            if not hasattr(agent, 'llm_engine'):
+                agent.llm_engine = LLMEngineFactory.create_engine(llm_kwargs.get("llm_engine_type", "qwen"), **llm_kwargs)
+            agent.wealth = agent._generate_wealth()
         
         # 设置记忆目录和文件路径
         agent.memory_dir = f"{directory}/{agent_id}"
@@ -450,4 +528,581 @@ class BaseAgent:
                 except:
                     pass
                     
-        return agents 
+        return agents
+
+    def sleep(self) -> None:
+        """每天结束时调用，处理短期记忆并将重要内容存入长期记忆
+        
+        过程:
+        1. 分析短期记忆并提取重要信息
+        2. 将重要信息存入长期记忆
+        3. 管理记忆容量，确保不超过最大限制
+        4. 反思今天的计划完成情况
+        
+        Returns:
+            None
+        """
+        # 如果没有短期记忆，直接返回
+        if not self.short_term_memory:
+            return
+        
+        # 反思当天计划完成情况
+        reflection = self._reflect_on_daily_plan()
+        if reflection:
+            # 将反思记录到短期记忆
+            self.add_memory(reflection)
+            
+        # 构建提示，用于分析短期记忆
+        memories_text = "\n".join(self.short_term_memory)
+        prompt = f"""作为{self.name}({self.mbti})，请分析以下今天的经历，并总结最值得记住的3-5条记忆：
+
+今天的经历:
+{memories_text}
+
+请根据以下标准评估哪些记忆最重要:
+1. 对个人成长的影响
+2. 涉及重要人际关系的事件
+3. 情感强度高的体验
+4. 与重要目标相关的进展
+5. 特别的新信息或洞察
+
+对于你({self.name})这样一个{self.background['gender']}性、{self.background['age']}岁{self.background['occupation']}，具有{self.mbti}性格特质的人，请从上述经历中提取3-5条最重要的记忆，并进行简短总结。
+
+按重要性排序输出，每条总结使用一段简洁的文字（30-50字），确保包含相关的时间、地点、人物和事件。
+
+输出格式: 每条记忆单独一行，不要编号，直接给出记忆内容。
+"""
+        
+        # 使用LLM生成记忆总结
+        summarized_memories = self.llm_engine.generate(prompt)
+        
+        # 如果生成失败，使用简化的提示重试
+        if not summarized_memories or summarized_memories.strip() == "":
+            simplified_prompt = f"请总结以下内容中最重要的3-5个要点，每点一行:\n\n{memories_text}"
+            summarized_memories = self.llm_engine.generate(simplified_prompt)
+            
+            # 如果再次失败，保留1-2条原始记忆作为备选
+            if not summarized_memories or summarized_memories.strip() == "":
+                if len(self.short_term_memory) > 2:
+                    summarized_memories = "\n".join(self.short_term_memory[-2:])
+                else:
+                    summarized_memories = "\n".join(self.short_term_memory)
+        
+        # 将总结的记忆分割成单独的条目
+        important_memories = [m.strip() for m in summarized_memories.split("\n") if m.strip()]
+        
+        # 将重要记忆添加到长期记忆中
+        for memory in important_memories:
+            self._save_to_long_memory(memory)
+            
+        # 重新加载记忆以更新内存中的列表
+        self._load_memories()
+            
+        # 检查并管理长期记忆容量
+        self._manage_long_term_memory()
+            
+        # 检查短期记忆是否超过最大长度，如果超过，则删除最早的记忆直到剩余一半
+        if len(self.short_term_memory) > self.max_short_term_memories:
+            # 计算需要保留的数量（一半的最大容量）
+            keep_count = self.max_short_term_memories // 2
+            
+            # 保留最新的记忆
+            self.short_term_memory = self.short_term_memory[-keep_count:]
+            
+            # 更新短期记忆文件
+            with open(self.shortterm_file, "w", encoding="utf-8") as f:
+                f.write("\n".join(self.short_term_memory))
+                
+            print(f"{self.name} 的短期记忆超过最大限制，保留了最新的{keep_count}条记忆")
+            
+        # 更新向量存储
+        self._update_vector_store()
+        
+        # 重置一天结束的状态
+        self.status = "休息中"  # 睡眠时的状态
+        
+    def _reflect_on_daily_plan(self) -> str:
+        """反思当天计划完成情况
+        
+        基于智能体的性格和背景，反思一天的计划完成度、成功之处和需要改进的地方
+        
+        Returns:
+            str: 反思结果
+        """
+        if not self.daily_plan:
+            return ""
+            
+        # 计算计划完成度
+        total_plans = len(self.daily_plan)
+        completed_plans = 0
+        partially_completed_plans = 0
+        locations_visited = set()
+        completed_activities = []
+        uncompleted_activities = []
+        
+        for i, plan in enumerate(self.daily_plan):
+            # 获取已度过的轮数
+            rounds_spent = plan.get("_rounds_spent", 0)
+            
+            # 如果完全完成了计划的时间
+            if rounds_spent >= plan["duration"]:
+                completed_plans += 1
+                locations_visited.add(plan["location"])
+                completed_activities.append(f"{i+1}. {plan['activity']} 在{plan['location']}")
+            # 如果部分完成（至少度过了一轮）
+            elif rounds_spent > 0:
+                partially_completed_plans += 1
+                locations_visited.add(plan["location"])
+                completed_activities.append(f"{i+1}. 部分完成：{plan['activity']} 在{plan['location']} ({rounds_spent}/{plan['duration']}轮)")
+            # 如果完全未完成
+            else:
+                uncompleted_activities.append(f"{i+1}. {plan['activity']} 在{plan['location']}")
+        
+        # 计算完成率
+        completion_rate = int((completed_plans + 0.5 * partially_completed_plans) / total_plans * 100)
+        
+        # 构建提示
+        prompt = f"""作为{self.name}，一个{self.background['gender']}性{self.background['age']}岁{self.background['occupation']}，MBTI性格类型为{self.mbti}，我需要对今天的计划完成情况进行反思。
+
+今天的计划完成情况:
+- 总计划数: {total_plans}
+- 完全完成的计划: {completed_plans}
+- 部分完成的计划: {partially_completed_plans}
+- 未完成的计划: {total_plans - completed_plans - partially_completed_plans}
+- 完成率: {completion_rate}%
+- 访问的地点: {', '.join(locations_visited)}
+
+完成的活动:
+{chr(10).join(completed_activities)}
+
+未完成的活动:
+{chr(10).join(uncompleted_activities)}
+
+请根据我的性格特点({self.mbti})和职业背景({self.background['occupation']})，写一段简短的日记式反思，包括：
+1. 对今天计划完成情况的满意度
+2. 哪些方面做得好，哪些方面需要改进
+3. 对未完成计划的想法和明天可能的调整
+4. 符合我{self.mbti}性格的情感和思考方式
+
+请以第一人称撰写，保持自然流畅，30-80字左右。不要用"今天我..."开头，直接进入反思。
+"""
+        
+        # 使用LLM生成反思
+        reflection = self.llm_engine.generate(prompt)
+        
+        # 如果生成失败，使用简化的提示重试
+        if not reflection or reflection.strip() == "":
+            simplified_prompt = f"作为{self.name}，MBTI类型{self.mbti}，写一段简短反思，讨论今天完成了{completion_rate}%的计划，感受如何？"
+            reflection = self.llm_engine.generate(simplified_prompt)
+            
+            # 如果再次失败，使用默认反思
+            if not reflection or reflection.strip() == "":
+                if completion_rate >= 70:
+                    reflection = f"今天完成了大部分计划，很满意自己的效率。明天继续保持这种状态。"
+                elif completion_rate >= 40:
+                    reflection = f"今天完成了一些计划，但还有改进空间。明天需要更专注一些。"
+                else:
+                    reflection = f"今天计划完成得不太理想，明天需要重新调整时间分配和优先级。"
+        
+        # 在反思前添加引言
+        return f"一天结束，我对今天的计划完成情况进行了反思：{reflection.strip()}"
+
+    def plan(self, available_locations: List[str], location_descriptions: Dict[str, str], max_rounds: int = 5) -> List[Dict]:
+        """制定每日计划
+        
+        根据智能体的背景、长期和短期记忆制定一天的活动计划
+        
+        Args:
+            available_locations: 可用的位置列表
+            location_descriptions: 位置描述字典 {位置名: 描述}
+            max_rounds: 一天的最大轮数
+            
+        Returns:
+            List[Dict]: 计划列表，每个元素是一个字典，包含位置、停留轮数、活动等信息
+        """
+        # 重置计划索引
+        self.current_plan_index = 0
+        
+        # 获取最近的记忆，构建上下文
+        recent_short_memories = self.short_term_memory[-min(10, len(self.short_term_memory)):]
+        recent_short_memories_text = "\n".join(recent_short_memories)
+        
+        # 提取长期记忆中的关键信息
+        key_long_memories = []
+        for memory in self.long_term_memory[-20:]:  # 最近20条长期记忆
+            for location in available_locations:
+                if location in memory:
+                    key_long_memories.append(memory)
+                    break
+        key_long_memories_text = "\n".join(key_long_memories[-5:])  # 最多5条与位置相关的长期记忆
+        
+        # 获取当前所在位置（从最新的短期记忆中提取）
+        current_location = None
+        for memory in reversed(self.short_term_memory):
+            if "我现在在" in memory or "我从" in memory and "移动到了" in memory:
+                for location in available_locations:
+                    if f"我现在在{location}" in memory:
+                        current_location = location
+                        break
+                    elif f"移动到了{location}" in memory:
+                        current_location = location
+                        break
+                if current_location:
+                    break
+        
+        # 如果无法确定当前位置，随机选择一个
+        if not current_location and available_locations:
+            current_location = random.choice(available_locations)
+            
+        # 构建位置描述文本
+        locations_text = ""
+        for loc in available_locations:
+            desc = location_descriptions.get(loc, "")
+            locations_text += f"- {loc}: {desc}\n"
+            
+        # 构建提示，用于生成计划
+        prompt = f"""作为{self.name}，一个{self.background['gender']}性{self.background['age']}岁{self.background['occupation']}，MBTI性格类型为{self.mbti}，我需要根据我的背景和记忆制定今天的活动计划。
+
+我的背景信息:
+- 年龄: {self.background['age']}岁
+- 性别: {self.background['gender']}
+- 职业: {self.background['occupation']}
+- 教育水平: {self.background['education']}
+- 家乡: {self.background['hometown']}
+- 外貌: {self.appearance}
+
+我当前所在位置: {current_location}
+
+可用的位置:
+{locations_text}
+
+我的近期记忆:
+{recent_short_memories_text}
+
+我的重要长期记忆:
+{key_long_memories_text}
+
+请根据以上信息，为我制定一个符合我性格特点和背景的一天计划，包括我要去的地点、在每个地点停留的时间和我要做的事情。
+
+计划格式要求:
+1. 分为{max_rounds}个时间段（上午、中午、下午、晚上等）
+2. 每个时间段指定一个地点（从可用位置中选择）
+3. 每个时间段1-2句话描述我计划做的事情
+4. 行动计划要符合我的MBTI性格和职业背景
+5. 考虑我的近期记忆中的活动和人际互动
+6. 如果我最近与某人有互动，可以考虑安排与他们再次见面
+
+请直接输出JSON格式，格式如下:
+[
+  {{
+    "location": "地点名称",
+    "duration": 1,
+    "activity": "计划做的事情",
+    "status": "状态描述（如'工作中'、'放松中'、'用餐中'等）"
+  }},
+  ...
+]
+
+确保输出是有效的JSON格式，并且每个地点都是从可用位置列表中选择的。每个时间段的duration总和应该是{max_rounds}。
+"""
+        
+        # 使用LLM生成计划
+        plan_text = self.llm_engine.generate(prompt)
+        
+        # 尝试解析生成的JSON
+        try:
+            # 提取JSON部分（可能有其他文本）
+            json_start = plan_text.find('[')
+            json_end = plan_text.rfind(']') + 1
+            
+            if json_start >= 0 and json_end > json_start:
+                plan_json = plan_text[json_start:json_end]
+                daily_plan = json.loads(plan_json)
+                
+                # 验证并清理计划
+                cleaned_plan = []
+                total_duration = 0
+                
+                for item in daily_plan:
+                    # 确保必要的键存在
+                    if "location" not in item or "duration" not in item or "activity" not in item:
+                        continue
+                        
+                    # 确保位置是有效的
+                    if item["location"] not in available_locations:
+                        # 替换为当前位置或随机位置
+                        item["location"] = current_location or random.choice(available_locations)
+                    
+                    # 确保duration是有效的
+                    try:
+                        item["duration"] = int(item["duration"])
+                        if item["duration"] < 1:
+                            item["duration"] = 1
+                    except:
+                        item["duration"] = 1
+                    
+                    # 如果没有状态，根据活动生成一个
+                    if "status" not in item or not item["status"]:
+                        activity = item["activity"].lower()
+                        if "工作" in activity or "学习" in activity:
+                            item["status"] = "工作中"
+                        elif "吃" in activity or "喝" in activity or "餐" in activity:
+                            item["status"] = "用餐中"
+                        elif "休息" in activity or "放松" in activity:
+                            item["status"] = "放松中"
+                        elif "聊天" in activity or "交流" in activity or "讨论" in activity:
+                            item["status"] = "社交中"
+                        else:
+                            item["status"] = "活动中"
+                            
+                    cleaned_plan.append(item)
+                    total_duration += item["duration"]
+                
+                # 确保总duration不超过max_rounds
+                if total_duration > max_rounds:
+                    # 按比例缩减duration
+                    factor = max_rounds / total_duration
+                    for item in cleaned_plan:
+                        item["duration"] = max(1, int(item["duration"] * factor))
+                    
+                    # 可能需要再次调整以确保总和正确
+                    total_duration = sum(item["duration"] for item in cleaned_plan)
+                    if total_duration < max_rounds:
+                        # 给最后一个计划项增加剩余的轮数
+                        cleaned_plan[-1]["duration"] += (max_rounds - total_duration)
+                    elif total_duration > max_rounds:
+                        # 从最后一个计划项减去多余的轮数
+                        extra = total_duration - max_rounds
+                        for i in reversed(range(len(cleaned_plan))):
+                            if cleaned_plan[i]["duration"] > extra:
+                                cleaned_plan[i]["duration"] -= extra
+                                break
+                            else:
+                                extra -= (cleaned_plan[i]["duration"] - 1)
+                                cleaned_plan[i]["duration"] = 1
+                                if extra == 0:
+                                    break
+                
+                # 更新智能体的计划和状态
+                self.daily_plan = cleaned_plan
+                if cleaned_plan:
+                    self.status = cleaned_plan[0]["status"]
+                    
+                # 记录计划到短期记忆
+                plan_summary = "我的今日计划:\n"
+                for i, item in enumerate(cleaned_plan):
+                    plan_summary += f"{i+1}. 在{item['location']}停留{item['duration']}个时段，{item['activity']}。\n"
+                self.add_memory(plan_summary)
+                
+                return cleaned_plan
+            
+        except Exception as e:
+            print(f"{self.name}制定计划时出错: {e}")
+            
+        # 如果解析失败，创建一个简单的默认计划
+        default_plan = []
+        remaining_rounds = max_rounds
+        
+        # 当前位置停留1轮
+        if current_location:
+            default_plan.append({
+                "location": current_location,
+                "duration": 1,
+                "activity": "查看周围环境，考虑接下来要做什么",
+                "status": "观察中"
+            })
+            remaining_rounds -= 1
+        
+        # 随机选择其他位置
+        while remaining_rounds > 0:
+            # 排除当前位置和已经计划要去的位置
+            planned_locations = [item["location"] for item in default_plan]
+            available = [loc for loc in available_locations if loc not in planned_locations]
+            
+            # 如果没有更多可用位置，随机选择任意位置
+            if not available:
+                available = available_locations
+                
+            location = random.choice(available)
+            duration = min(remaining_rounds, random.randint(1, 2))
+            
+            default_plan.append({
+                "location": location,
+                "duration": duration,
+                "activity": f"前往{location}探索",
+                "status": "探索中"
+            })
+            
+            remaining_rounds -= duration
+        
+        # 更新智能体的计划和状态
+        self.daily_plan = default_plan
+        if default_plan:
+            self.status = default_plan[0]["status"]
+            
+        # 记录计划到短期记忆
+        plan_summary = "我制定了简单的今日计划:\n"
+        for i, item in enumerate(default_plan):
+            plan_summary += f"{i+1}. 在{item['location']}停留{item['duration']}个时段，{item['activity']}。\n"
+        self.add_memory(plan_summary)
+        
+        return default_plan
+        
+    def get_next_planned_location(self) -> Optional[str]:
+        """获取下一个计划中的位置
+        
+        根据当前计划索引返回下一个应该去的位置
+        
+        Returns:
+            Optional[str]: 下一个计划位置，如果没有计划则返回None
+        """
+        if not self.daily_plan or self.current_plan_index >= len(self.daily_plan):
+            return None
+            
+        next_location = self.daily_plan[self.current_plan_index]["location"]
+        self.status = self.daily_plan[self.current_plan_index]["status"]
+        return next_location
+        
+    def update_plan_progress(self) -> None:
+        """更新计划进度
+        
+        每轮结束后调用，更新当前计划的进度
+        """
+        if not self.daily_plan:
+            return
+            
+        # 如果当前计划已经完成所有时间段，移动到下一个计划
+        if self.current_plan_index < len(self.daily_plan):
+            current_plan = self.daily_plan[self.current_plan_index]
+            current_plan["_rounds_spent"] = current_plan.get("_rounds_spent", 0) + 1
+            
+            # 如果已经完成当前计划的所有轮数，移动到下一个计划
+            if current_plan["_rounds_spent"] >= current_plan["duration"]:
+                self.current_plan_index += 1
+                
+                # 如果还有下一个计划，更新状态
+                if self.current_plan_index < len(self.daily_plan):
+                    self.status = self.daily_plan[self.current_plan_index]["status"]
+                else:
+                    self.status = "休息中" 
+
+    def _generate_wealth(self) -> Dict[str, float]:
+        """根据智能体的背景和性格，使用LLM生成初始财富值
+        
+        Returns:
+            Dict[str, float]: 包含五种财富的字典：时间、社交、健康、精神和金钱
+        """
+        # 构建提示，基于智能体的属性
+        prompt = f"""
+作为一位角色财富状态生成器，请为以下角色生成初始财富状态。
+
+角色信息:
+- 姓名: {self.name}
+- 性别: {self.background['gender']}
+- 年龄: {self.background['age']}岁
+- 职业: {self.background['occupation']}
+- 教育程度: {self.background['education']}
+- 家乡: {self.background['hometown']}
+- MBTI性格: {self.mbti}
+- 外貌: {self.appearance}
+
+请生成五种财富的数值：
+1. 时间财富: -1.0到1.0之间的浮点数，表示角色拥有的自由时间多少
+   -1.0表示极度匮乏（非常忙碌），0表示平衡，1.0表示极度充裕（有大量闲暇时间）
+2. 社交财富: -1.0到1.0之间的浮点数，表示角色的社交资源和能力
+   -1.0表示极度匮乏（社交孤立），0表示一般，1.0表示极度丰富（社交资源丰富）
+3. 健康财富: -1.0到1.0之间的浮点数，表示角色的身体健康状况
+   -1.0表示极度不健康，0表示一般健康，1.0表示极度健康（体魄强健）
+4. 精神财富: -1.0到1.0之间的浮点数，表示角色的精神状态和幸福感
+   -1.0表示极度匮乏（精神压力大），0表示一般，1.0表示极度丰富（精神愉悦充实）
+5. 金钱财富: 一个非负浮点数，基础为10000.0，表示角色拥有的金钱数量（单位：元）
+   - 学生一般在5000-15000之间
+   - 普通职业者一般在10000-50000之间
+   - 高收入职业者一般在50000-200000之间
+   - 要考虑年龄、职业、教育程度等因素
+
+要求:
+1. 请根据角色的背景、年龄、职业、性格特点逻辑推断合理的财富值
+2. 所有值必须在规定范围内，且符合角色设定
+3. 只返回JSON格式的财富数据，不要包含任何解释或其他文字
+
+返回格式示例:
+{{
+  "time": 0.2,
+  "social": -0.5,
+  "health": 0.7,
+  "mental": 0.1,
+  "money": 25000.0
+}}
+"""
+        
+        try:
+            # 获取LLM生成的财富数据
+            response = self.llm_engine.generate(prompt)
+            
+            # 确保response不为None
+            if not response or not response.strip():
+                return self._generate_default_wealth()
+                
+            # 解析JSON
+            try:
+                wealth = json.loads(response)
+                # 验证数据格式
+                if all(key in wealth for key in ["time", "social", "health", "mental", "money"]):
+                    # 验证数值范围
+                    time_value = max(min(float(wealth["time"]), 1.0), -1.0)
+                    social_value = max(min(float(wealth["social"]), 1.0), -1.0)
+                    health_value = max(min(float(wealth["health"]), 1.0), -1.0)
+                    mental_value = max(min(float(wealth["mental"]), 1.0), -1.0)
+                    money_value = max(float(wealth["money"]), 0.0)
+                    
+                    return {
+                        "time": time_value,
+                        "social": social_value,
+                        "health": health_value,
+                        "mental": mental_value,
+                        "money": money_value
+                    }
+            except:
+                pass
+                
+            # 如果解析失败，使用默认值
+            return self._generate_default_wealth()
+                
+        except Exception as e:
+            print(f"生成财富数据时出错: {e}")
+            return self._generate_default_wealth()
+    
+    def _generate_default_wealth(self) -> Dict[str, float]:
+        """生成默认的财富数据，当LLM生成失败时使用"""
+        # 基于职业和年龄设置默认金钱财富
+        occupation = self.background["occupation"]
+        age = self.background["age"]
+        
+        # 根据职业设置基础金钱
+        if occupation == "学生":
+            base_money = 8000.0
+        elif occupation in ["工程师", "医生"]:
+            base_money = 30000.0
+        elif occupation == "教师":
+            base_money = 20000.0
+        elif occupation == "艺术家":
+            base_money = 15000.0
+        else:
+            base_money = 10000.0
+            
+        # 根据年龄调整金钱（25岁以上每增加5岁增加20%）
+        if age > 25:
+            age_factor = 1.0 + ((age - 25) // 5) * 0.2
+            money = base_money * age_factor
+        else:
+            money = base_money
+            
+        # 随机生成其他财富值
+        return {
+            "time": round(random.uniform(-0.7, 0.7), 2),
+            "social": round(random.uniform(-0.7, 0.7), 2),
+            "health": round(random.uniform(-0.3, 0.8), 2),
+            "mental": round(random.uniform(-0.5, 0.8), 2),
+            "money": round(money, 2)
+        } 

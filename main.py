@@ -7,6 +7,40 @@ from environment.world import World
 from environment.environment_descriptions import EnvironmentDescriptions
 import random
 import json
+from typing import List
+from agent.interact import initiate_conversation
+
+# 添加LLM引擎验证器
+from llm_engine.engine_verifier import EngineVerifier
+
+def verify_llm_engines():
+    """验证LLM引擎状态，并显示结果"""
+    print("\n正在验证LLM引擎状态...")
+    verifier = EngineVerifier()
+    verifier.verify_all_engines()
+    verifier.display_status()
+    
+    # 获取可用的引擎
+    available_engines = verifier.get_available_engines()
+    mock_engines = verifier.get_engines_in_mock_mode()
+    
+    if not available_engines and not mock_engines:
+        print("\n警告: 没有可用的LLM引擎，程序可能无法正常运行。")
+        print("请检查API密钥配置和网络连接。")
+        # 询问用户是否仍要继续
+        response = input("是否仍要继续运行程序? (y/n): ")
+        if response.lower() != 'y':
+            print("程序退出。")
+            exit(1)
+    elif not available_engines and mock_engines:
+        print("\n注意: 所有LLM引擎都处于模拟模式。智能体将使用预设的回复，而不是真实的LLM响应。")
+        # 询问用户是否仍要继续
+        response = input("是否仍要继续运行程序? (y/n): ")
+        if response.lower() != 'y':
+            print("程序退出。")
+            exit(1)
+    
+    return verifier.get_first_available_engine()
 
 def clean_environment():
     """清理环境，删除所有智能体及其记忆"""
@@ -163,13 +197,13 @@ def run_simulation(agents, rounds=5, visual_mode=False, max_conversation_partici
     """
     运行智能体模拟
     
-    Args:
-        agents: 智能体列表
-        rounds: 模拟轮数
-        visual_mode: 是否启用可视化模式
-        max_conversation_participants: 一次对话最多参与者数量
-        environment_init: 是否重新初始化环境描述
-        location_count: 生成的地点数量
+    参数:
+    agents: 智能体列表
+    rounds: 模拟轮数
+    visual_mode: 是否启用可视化模式
+    max_conversation_participants: 一次对话最多参与者数量
+    environment_init: 是否重新初始化环境描述
+    location_count: 生成的地点数量
     """
     # 初始化环境描述
     env_descriptions = EnvironmentDescriptions()
@@ -188,321 +222,204 @@ def run_simulation(agents, rounds=5, visual_mode=False, max_conversation_partici
         world.add_agent(agent, location)
         print(f"{agent.name}（{agent.mbti}，{agent.background['gender']}）被放置在{location}")
         print(f"外貌: {agent.appearance}")
+        print(f"财富状态: 时间:{agent.wealth['time']:.2f}, 社交:{agent.wealth['social']:.2f}, 健康:{agent.wealth['health']:.2f}, 精神:{agent.wealth['mental']:.2f}, 金钱:{agent.wealth['money']:.2f}元")
         
         # 记录初始位置到短期记忆中
         agent.add_memory(f"我现在在{location}。{world.locations[location].description}")
     
     try:
-        # 模拟一段时间内的活动
-        for _ in range(rounds):
-            print("\n=== 新一轮活动开始 ===")
+        # 计算每天的轮数和总天数
+        rounds_per_day = 5  # 每天默认5轮
+        total_days = (rounds + rounds_per_day - 1) // rounds_per_day  # 向上取整，确保所有轮数都被执行
+        
+        # 模拟多天的活动
+        current_round = 0
+        for day in range(total_days):
+            print(f"\n=== 第{day+1}天开始 ===")
             
-            # 让每个智能体随机移动
+            # 在新的一天开始时，让所有智能体制定计划
+            print("\n=== 智能体们正在制定计划 ===")
+            
+            # 准备位置描述字典
+            location_descriptions = {}
+            for loc_name in world.locations:
+                location_descriptions[loc_name] = world.locations[loc_name].description
+            
+            # 让每个智能体制定计划
             for agent in agents:
-                current_location = None
-                for loc_name, loc in world.locations.items():
-                    if agent.id in loc.current_agents:
-                        current_location = loc_name
-                        break
+                print(f"{agent.name} 正在制定今日计划...")
+                agent.plan(
+                    available_locations=list(world.locations.keys()),
+                    location_descriptions=location_descriptions,
+                    max_rounds=rounds_per_day  # 每天的最大轮数
+                )
                 
-                if current_location:
-                    connected_locations = world.get_connected_locations(current_location)
-                    if connected_locations:
-                        target_location = random.choice(connected_locations)
-                        if world.move_agent(agent.id, target_location):
-                            print(f"{agent.name}从{current_location}移动到了{target_location}")
-                            # 记录移动到短期记忆
-                            agent.add_memory(f"我从{current_location}移动到了{target_location}。{world.locations[target_location].description}")
+                # 打印计划摘要
+                if agent.daily_plan:
+                    plan_summary = f"{agent.name} 的今日计划："
+                    for i, item in enumerate(agent.daily_plan):
+                        plan_summary += f"\n{i+1}. {item['location']}({item['duration']}轮): {item['activity']} ({item['status']})"
+                    print(plan_summary)
             
-            # 打印每个地点的智能体情况
-            print("\n=== 当前各地点智能体分布 ===")
-            for location_name, location in world.locations.items():
-                agents_at_location = world.get_agents_at_location(location_name)
-                if agents_at_location:
-                    agent_names = [agent.name for agent in agents_at_location]
-                    print(f"{location_name}: {', '.join(agent_names)} (共{len(agents_at_location)}人)")
-                else:
-                    print(f"{location_name}: 无人")
+            print("=== 所有智能体都已制定计划 ===\n")
             
-            # 检查每个位置的智能体互动
-            for location_name in world.locations:
-                agents_at_location = world.get_agents_at_location(location_name)
+            # 计算当天可执行的轮数（不超过剩余总轮数）
+            day_rounds = min(rounds_per_day, rounds - current_round)
+            
+            # 模拟当天的轮次
+            for round_in_day in range(day_rounds):
+                current_round += 1
+                print(f"\n=== 第{day+1}天 第{round_in_day+1}轮活动开始（总第{current_round}轮）===")
                 
-                # 如果当前位置有多个智能体，可以进行对话
-                if len(agents_at_location) > 1:
-                    print(f"\n在{location_name}的智能体们开始互动：")
+                # 根据计划移动智能体，而不是随机移动
+                for agent in agents:
+                    # 获取智能体当前位置
+                    current_location = None
+                    for loc_name, loc in world.locations.items():
+                        if agent.id in loc.current_agents:
+                            current_location = loc_name
+                            break
                     
-                    # 智能体分组对话
-                    conversation_groups = []
-                    remaining_agents = agents_at_location.copy()
+                    # 获取计划中的下一个位置
+                    next_location = agent.get_next_planned_location()
                     
-                    # 优先将外向型智能体作为对话发起者
-                    sorted_remaining = sorted(remaining_agents, key=lambda a: 0 if a.mbti.startswith('E') else 1)
-                    
-                    while len(sorted_remaining) >= 2:
-                        # 确定这一组的大小
-                        max_possible_size = min(len(sorted_remaining), max_conversation_participants)
-                        if max_possible_size <= 2:
-                            group_size = 2
+                    # 如果有计划的下一个位置，并且与当前位置不同，尝试移动
+                    if next_location and next_location != current_location:
+                        # 检查是否可以直接移动（是否相连）
+                        connected_locations = world.get_connected_locations(current_location)
+                        
+                        if next_location in connected_locations:
+                            # 直接移动到目标位置
+                            if world.move_agent(agent.id, next_location):
+                                print(f"{agent.name}({agent.status})从{current_location}移动到了{next_location}")
+                                # 记录移动到短期记忆
+                                agent.add_memory(f"我从{current_location}移动到了{next_location}。{world.locations[next_location].description}")
                         else:
-                            # 根据外向型智能体比例调整组大小概率
-                            extroverts = sum(1 for a in sorted_remaining[:max_possible_size] if a.mbti.startswith('E'))
-                            extrovert_ratio = extroverts / max_possible_size
-                            
-                            if extrovert_ratio > 0.5:  # 外向型智能体较多，更可能形成大组
-                                # 偏向较大组
-                                size_weights = [0.1, 0.2, 0.3, 0.4][:max_possible_size-1]
-                            else:  # 内向型智能体较多，更可能形成小组
-                                # 偏向较小组
-                                size_weights = [0.4, 0.3, 0.2, 0.1][:max_possible_size-1]
-                                
-                            # 归一化权重
-                            total = sum(size_weights)
-                            size_weights = [w/total for w in size_weights]
-                            
-                            # 根据权重随机选择组大小
-                            sizes = list(range(2, max_possible_size+1))
-                            group_size = random.choices(sizes, weights=size_weights, k=1)[0]
+                            # 如果目标位置不直接相连，找到一条路径
+                            # 简单方法：选择一个朝着目标方向的位置
+                            # 这里可以实现更复杂的寻路算法
+                            if connected_locations:
+                                # 随机选择一个位置朝着目标位置移动
+                                random_next = random.choice(connected_locations)
+                                if world.move_agent(agent.id, random_next):
+                                    print(f"{agent.name}({agent.status})从{current_location}移动到了{random_next}，正在前往{next_location}")
+                                    # 记录移动到短期记忆
+                                    agent.add_memory(f"我从{current_location}移动到了{random_next}，正在前往{next_location}。{world.locations[random_next].description}")
+                    else:
+                        # 如果已经在计划的位置或者没有计划，则停留在当前位置
+                        if next_location and next_location == current_location:
+                            plan_item = agent.daily_plan[agent.current_plan_index]
+                            print(f"{agent.name}({agent.status})在{current_location}停留，{plan_item['activity']}")
+                            agent.add_memory(f"我在{current_location}进行了活动：{plan_item['activity']}")
                         
-                        # 随机选择智能体组成对话组（保证第一个是外向型，如果有的话）
-                        if sorted_remaining and sorted_remaining[0].mbti.startswith('E'):
-                            # 第一个必须是外向型
-                            first_member = sorted_remaining[0]
-                            other_members = random.sample(sorted_remaining[1:], min(group_size-1, len(sorted_remaining)-1))
-                            group = [first_member] + other_members
-                        else:
-                            # 没有外向型，完全随机
-                            group = random.sample(sorted_remaining, min(group_size, len(sorted_remaining)))
-                            
-                        conversation_groups.append(group)
-                        
-                        # 从剩余智能体中移除已分配的智能体
-                        for agent in group:
-                            sorted_remaining.remove(agent)
+                    # 更新计划进度
+                    agent.update_plan_progress()
+                
+                # 打印每个地点的智能体情况
+                print("\n=== 当前各地点智能体分布 ===")
+                for location_name, location in world.locations.items():
+                    agents_at_location = world.get_agents_at_location(location_name)
+                    if agents_at_location:
+                        agent_names = [f"{agent.name}({agent.status})" for agent in agents_at_location]
+                        print(f"{location_name}: {', '.join(agent_names)} (共{len(agents_at_location)}人)")
+                    else:
+                        print(f"{location_name}: 无人")
+                
+                # 检查每个位置的智能体互动
+                for location_name in world.locations:
+                    agents_at_location = world.get_agents_at_location(location_name)
                     
-                    # 处理每个对话组
-                    for group_idx, participants in enumerate(conversation_groups):
-                        # 显示对话组信息
-                        participant_info = ", ".join([f"{a.name}({a.mbti}，{a.background['gender']})" for a in participants])
-                        print(f"\n对话组 {group_idx + 1}：{participant_info}")
+                    # 如果当前位置有多个智能体，可以进行对话
+                    if len(agents_at_location) > 1:
+                        print(f"\n在{location_name}的智能体们开始互动：")
                         
-                        # 外向型智能体优先发言
-                        participants = sorted(participants, key=lambda a: 0 if a.mbti.startswith('E') else 1)
+                        # 智能体分组对话
+                        conversation_groups = []
+                        remaining_agents = agents_at_location.copy()
                         
-                        # 初始化对话状态
-                        conversation_round = 1
-                        conversation_history = []
-                        goodbye_flags = {a.id: False for a in participants}  # 记录每个智能体是否已道别
+                        # 优先将外向型智能体作为对话发起者
+                        sorted_remaining = sorted(remaining_agents, key=lambda a: 0 if a.mbti.startswith('E') else 1)
                         
-                        # 获取环境描述
-                        environment_desc = env_descriptions.get_description(location_name)
-                        
-                        # 生成可能的对话话题
-                        potential_topics = env_descriptions.get_topics(location_name)
-                        suggested_topic = random.choice(potential_topics)
-                        
-                        # 记录当前场景中的其他人
-                        for agent in participants:
-                            # 获取当前场景中的其他参与者
-                            other_participants = [p for p in participants if p.id != agent.id]
-                            other_participants_info = []
+                        while len(sorted_remaining) >= 2:
+                            # 确定这一组的大小
+                            max_possible_size = min(len(sorted_remaining), max_conversation_participants)
+                            if max_possible_size <= 2:
+                                group_size = 2
+                            else:
+                                # 根据外向型智能体比例调整组大小概率
+                                extroverts = sum(1 for a in sorted_remaining[:max_possible_size] if a.mbti.startswith('E'))
+                                extrovert_ratio = extroverts / max_possible_size
+                                
+                                if extrovert_ratio > 0.5:  # 外向型智能体较多，更可能形成大组
+                                    # 偏向较大组
+                                    size_weights = [0.1, 0.2, 0.3, 0.4][:max_possible_size-1]
+                                else:  # 内向型智能体较多，更可能形成小组
+                                    # 偏向较小组
+                                    size_weights = [0.4, 0.3, 0.2, 0.1][:max_possible_size-1]
+                                    
+                                # 归一化权重
+                                total = sum(size_weights)
+                                size_weights = [w/total for w in size_weights]
+                                
+                                # 根据权重随机选择组大小
+                                sizes = list(range(2, max_possible_size+1))
+                                group_size = random.choices(sizes, weights=size_weights, k=1)[0]
                             
-                            for p in other_participants:
-                                other_participants_info.append(f"{p.name}({p.mbti}，{p.background['gender']}性{p.background['occupation']}，外貌：{p.appearance})")
+                            # 随机选择智能体组成对话组（保证第一个是外向型，如果有的话）
+                            if sorted_remaining and sorted_remaining[0].mbti.startswith('E'):
+                                # 第一个必须是外向型
+                                first_member = sorted_remaining[0]
+                                other_members = random.sample(sorted_remaining[1:], min(group_size-1, len(sorted_remaining)-1))
+                                group = [first_member] + other_members
+                            else:
+                                # 没有外向型，完全随机
+                                group = random.sample(sorted_remaining, min(group_size, len(sorted_remaining)))
                                 
-                            # 记录到记忆中
-                            agent.add_memory(f"我在{location_name}遇到了: {', '.join(other_participants_info)}")
-                        
-                        # 第一轮对话：第一个智能体发言，其他人回应
-                        # 获取第一个发言者（通常是外向型）
-                        first_speaker = participants[0]
-                        
-                        # 构建智能体信息，用于对话提示
-                        participants_info = []
-                        for agent in participants:
-                            if agent.id != first_speaker.id:  # 排除发言者自己
-                                participants_info.append({
-                                    "name": agent.name,
-                                    "mbti": agent.mbti,
-                                    "gender": agent.background['gender'],
-                                    "occupation": agent.background['occupation'],
-                                    "appearance": agent.appearance
-                                })
-                        
-                        # 构建第一个发言者的提示
-                        other_participants_text = ""
-                        for idx, p in enumerate(participants_info):
-                            other_participants_text += f"参与者{idx+1}: {p['name']}，{p['gender']}性{p['occupation']}，{p['mbti']}类型，外貌：{p['appearance']}\n"
-                        
-                        # 第一个智能体发起对话
-                        query1 = f"""
-你是{first_speaker.name}，一个{first_speaker.background['gender']}性{first_speaker.background['occupation']}，性格是{first_speaker.mbti}，{first_speaker.background['age']}岁，来自{first_speaker.background['hometown']}。
-你的外貌: {first_speaker.appearance}
-
-你现在在{location_name}，正在一个{len(participants)}人的小组讨论中。其他参与者包括：
-{other_participants_text}
-
-当前环境描述:
-{environment_desc}
-
-请根据以下提示生成一句对话开场白:
-1. 考虑周围环境的特点和氛围
-2. 根据你的MBTI性格({first_speaker.mbti})，表现出对环境和对方的自然反应
-3. 这是一个多人讨论，你的开场白应该面向所有人，或者可以指名其中一人
-4. 可以围绕"{suggested_topic}"这个话题展开对话
-
-要求:
-- 自然、有深度的开场白，避免简单问候
-- 不要简单自我介绍
-- 表现出你的性格特点和对当前环境的感知
-- 字数在20-50字之间
-"""
-                        
-                        # 获取第一个智能体的回应
-                        response = first_speaker.query_memory(query1)
-                        print(f"{first_speaker.name}: {response}")
-                        conversation_history.append(f"{first_speaker.name}: {response}")
-                        
-                        # 添加对话到可视化器
-                        world.add_agent_dialog(first_speaker.name, response)
-                        
-                        # 记录到发言者的记忆中（只保存在短期记忆中）
-                        first_speaker.add_memory(f"在{location_name}对话中我说：{response}")
-                        
-                        # 定义用于检查道别的关键词
-                        goodbye_words = ["再见", "拜拜", "下次见", "告辞", "走了", "bye", "告别", "回头见", "待会见", "告退", "失陪"]
-                        
-                        # 进行多轮对话，每轮让一个智能体发言
-                        max_rounds = 3 + len(participants)  # 让每个人至少有机会说一句话
-                        current_round = 1
-                        
-                        while current_round < max_rounds and sum(goodbye_flags.values()) < len(participants) // 2:
-                            if visual_mode:
-                                time.sleep(0.5)  # 暂停使对话看起来更自然
+                            conversation_groups.append(group)
                             
-                            # 按顺序让每个智能体发言（跳过已经告别的智能体）
-                            for speaker_idx in range(len(participants)):
-                                speaker = participants[speaker_idx]
-                                
-                                # 如果当前智能体已经道别，跳过
-                                if goodbye_flags[speaker.id]:
-                                    continue
-                                
-                                # 获取上一个发言者
-                                last_speaker_name = conversation_history[-1].split(": ")[0]
-                                last_speech = conversation_history[-1].split(": ")[1]
-                                
-                                # 如果是第一个智能体且已经发过言，跳过
-                                if speaker.id == first_speaker.id and current_round == 1:
-                                    continue
-                                
-                                # 构建当前智能体的对话提示
-                                history_text = "\n".join(conversation_history[-min(len(conversation_history), 5):])
-                                
-                                # 根据对话进程决定是否应该结束对话
-                                should_consider_ending = current_round > 2
-                                ending_probability = 0.3 if should_consider_ending else 0.0
-                                
-                                # 构建当前发言者的提示
-                                other_participants_text = ""
-                                for idx, other_agent in enumerate(participants):
-                                    if other_agent.id != speaker.id:  # 排除发言者自己
-                                        other_participants_text += f"参与者{idx+1}: {other_agent.name}，{other_agent.background['gender']}性{other_agent.background['occupation']}，{other_agent.mbti}类型，外貌：{other_agent.appearance}\n"
-                                
-                                query = f"""
-你是{speaker.name}，一个{speaker.background['gender']}性{speaker.background['occupation']}，性格是{speaker.mbti}，{speaker.background['age']}岁，来自{speaker.background['hometown']}。
-你的外貌: {speaker.appearance}
-
-你现在在{location_name}，参与一个{len(participants)}人的对话，环境是：{environment_desc}
-其他参与者包括：
-{other_participants_text}
-
-对话历史：
-{history_text}
-
-刚才{last_speaker_name}说: "{last_speech}"
-
-请根据以下提示生成回应:
-1. 表现出你的{speaker.mbti}性格特点
-2. 回应内容要与上下文相关，可以针对最近的发言，也可以提出新的观点
-3. 你可以回应特定的某个人，也可以面向所有人
-4. 可以围绕"{suggested_topic}"这个话题
-5. 当前是第{current_round}轮对话，{"如果觉得合适，可以考虑结束对话" if should_consider_ending else "请保持对话流畅"}
-
-要求:
-- 回答要真实自然，像是在真实多人对话中的一句话
-- 体现你的性格特点
-- 字数在20-50字之间
-- 如果你觉得对话该结束了，可以自然地道别
-"""
-                                
-                                # 获取当前智能体的回应
-                                response = speaker.query_memory(query)
-                                print(f"{speaker.name}: {response}")
-                                conversation_history.append(f"{speaker.name}: {response}")
-                                
-                                # 添加对话到可视化器
-                                world.add_agent_dialog(speaker.name, response)
-                                
-                                # 记录到智能体的记忆中（只保存在短期记忆中）
-                                speaker.add_memory(f"在{location_name}对话中，{last_speaker_name}说：{last_speech}，我回应：{response}")
-                                
-                                # 检查是否有道别的意图
-                                for word in goodbye_words:
-                                    if word in response:
-                                        goodbye_flags[speaker.id] = True
-                                        break
-                                
-                                # 如果已经有足够多的人说再见了，结束对话
-                                if sum(goodbye_flags.values()) >= len(participants) // 2:
-                                    break
-                                
-                                # 更新世界可视化，仅在可视化模式下
-                                if visual_mode:
-                                    for _ in range(2):
-                                        world.update_world()
-                                        time.sleep(0.1)
-                                        
-                            # 如果已经有足够多的人说再见了，让剩余的人也说再见
-                            if sum(goodbye_flags.values()) >= len(participants) // 2 and sum(goodbye_flags.values()) < len(participants):
-                                # 让所有未道别的智能体道别
-                                for agent in participants:
-                                    if not goodbye_flags[agent.id]:
-                                        goodbye_msg = random.choice([
-                                            "我也该走了，下次再聊！",
-                                            "时间不早了，我也先告辞了。",
-                                            "既然大家都要走了，那我们改天再聊吧！",
-                                            "看来讨论要结束了，很高兴和大家交流！"
-                                        ])
-                                        print(f"{agent.name}: {goodbye_msg}")
-                                        conversation_history.append(f"{agent.name}: {goodbye_msg}")
-                                        world.add_agent_dialog(agent.name, goodbye_msg)
-                                        agent.add_memory(f"在{location_name}对话即将结束时，我说：{goodbye_msg}")
-                                
-                                        # 更新世界可视化，仅在可视化模式下
-                                        if visual_mode:
-                                            world.update_world()
-                                            time.sleep(0.1)
+                            # 从剩余智能体中移除已分配的智能体
+                            for agent in group:
+                                sorted_remaining.remove(agent)
+                        
+                        # 处理每个对话组
+                        for group_idx, participants in enumerate(conversation_groups):
+                            # 显示对话组信息
+                            participant_info = ", ".join([f"{a.name}({a.mbti}，{a.background['gender']})" for a in participants])
+                            print(f"\n对话组 {group_idx + 1}：{participant_info}")
                             
-                            # 增加轮次计数
-                            current_round += 1
-                        
-                        # 记录完整对话到所有参与者的记忆中（只保存在短期记忆中）
-                        full_conversation = "\n".join(conversation_history)
-                        participant_names = [agent.name for agent in participants]
-                        
-                        for agent in participants:
-                            agent.add_memory(f"在{location_name}与{', '.join([name for name in participant_names if name != agent.name])}的完整对话记录：\n{full_conversation}")
-                            # 保存智能体的身份信息
-                            agent.save_identity()
+                            # 获取环境描述
+                            environment_desc = env_descriptions.get_description(location_name)
+                            
+                            # 生成可能的对话话题
+                            potential_topics = env_descriptions.get_topics(location_name)
+                            suggested_topic = random.choice(potential_topics)
+                            
+                            # 使用interact模块进行对话
+                            initiate_conversation(
+                                participants=participants,
+                                location_name=location_name,
+                                environment_desc=environment_desc,
+                                world=world,
+                                suggested_topic=suggested_topic
+                            )
+                
+                # 使用LLM引擎判断是否需要更新智能体的财富值
+                update_agents_wealth(agents, world)
+                
+                # 更新世界可视化，仅在可视化模式下
+                if visual_mode:
+                    for _ in range(10):  # 更新多次以确保动画流畅
+                        world.update_world()
+                        time.sleep(0.1)
+                
+                time.sleep(1)  # 暂停一下，让输出更容易阅读
             
-            # 更新世界可视化，仅在可视化模式下
-            if visual_mode:
-                for _ in range(10):  # 更新多次以确保动画流畅
-                    world.update_world()
-                    time.sleep(0.1)
-            
-            time.sleep(1)  # 暂停一下，让输出更容易阅读
+            # 一天结束时，所有智能体进入睡眠模式，整理记忆
+            print("\n=== 第{day+1}天结束，智能体进入睡眠状态 ===")
+            for agent in agents:
+                print(f"{agent.name} 正在整理今天的记忆和反思计划完成情况...")
+                agent.sleep()
+            print("=== 所有智能体都已完成记忆整理 ===\n")
         
         # 模拟结束前持续更新一段时间，仅在可视化模式下
         if visual_mode:
@@ -518,6 +435,147 @@ def run_simulation(agents, rounds=5, visual_mode=False, max_conversation_partici
     # 确保可视化器正确关闭，仅在可视化模式下
     if visual_mode and world.visualizer:
         world.visualizer.close()
+
+# 新增函数：更新智能体财富值
+def update_agents_wealth(agents, world):
+    """
+    根据智能体的活动和交互情况，判断并更新其财富值
+    
+    参数:
+    agents: 所有智能体列表
+    world: 世界实例
+    """
+    print("\n=== 更新智能体财富值 ===")
+    
+    # 为每个智能体获取最近的记忆和活动
+    for agent in agents:
+        # 如果没有最近记忆，跳过
+        if not agent.short_term_memory:
+            continue
+            
+        # 获取最近三条记忆
+        recent_memories = agent.short_term_memory[-3:] if len(agent.short_term_memory) >= 3 else agent.short_term_memory
+        recent_activities = "\n".join(recent_memories)
+        
+        # 获取当前位置
+        current_location = None
+        for loc_name, loc in world.locations.items():
+            if agent.id in loc.current_agents:
+                current_location = loc_name
+                break
+                
+        if not current_location:
+            continue
+            
+        # 构建提示
+        prompt = f"""作为财富评估器，请分析以下智能体的最近活动，并判断是否需要更新其财富值。
+
+智能体信息:
+- 姓名: {agent.name}
+- 性别: {agent.background['gender']}
+- 年龄: {agent.background['age']}
+- 职业: {agent.background['occupation']}
+- MBTI性格: {agent.mbti}
+- 当前位置: {current_location}
+
+当前财富状态:
+- 时间财富: {agent.wealth['time']:.2f} (-1.0到1.0，越高表示自由时间越多)
+- 社交财富: {agent.wealth['social']:.2f} (-1.0到1.0，越高表示社交资源越丰富)
+- 健康财富: {agent.wealth['health']:.2f} (-1.0到1.0，越高表示越健康)
+- 精神财富: {agent.wealth['mental']:.2f} (-1.0到1.0，越高表示精神状态越好)
+- 金钱财富: {agent.wealth['money']:.2f}元
+
+最近活动:
+{recent_activities}
+
+请分析这些活动是否会影响智能体的财富值，并给出调整建议。例如:
+- 如果进行了运动或户外活动，健康财富可能增加
+- 如果进行了社交活动，社交财富可能增加
+- 如果工作或学习，时间财富可能减少，但精神财富可能增加
+- 如果购物或消费，金钱财富可能减少
+
+只返回一个JSON格式的调整数据，格式如下:
+{{
+  "time": 0.1,  // 变化值，正数为增加，负数为减少
+  "social": 0.2,
+  "health": 0.0,  // 0表示不变
+  "mental": -0.1,
+  "money": -50.0  // 金钱的绝对变化值
+}}
+"""
+
+        try:
+            # 获取LLM的分析结果
+            response = agent.llm_engine.generate(prompt)
+            
+            # 解析JSON
+            try:
+                import json
+                import re
+                
+                # 找到JSON部分并解析
+                json_match = re.search(r'\{.*\}', response.replace('\n', ''), re.DOTALL)
+                if json_match:
+                    json_str = json_match.group(0)
+                    changes = json.loads(json_str)
+                    
+                    # 提取变化值
+                    time_change = float(changes.get("time", 0))
+                    social_change = float(changes.get("social", 0))
+                    health_change = float(changes.get("health", 0))
+                    mental_change = float(changes.get("mental", 0))
+                    money_change = float(changes.get("money", 0))
+                    
+                    # 确保变化在合理范围内
+                    time_change = max(min(time_change, 0.2), -0.2)  # 限制单次变化幅度
+                    social_change = max(min(social_change, 0.2), -0.2)
+                    health_change = max(min(health_change, 0.2), -0.2)
+                    mental_change = max(min(mental_change, 0.2), -0.2)
+                    money_change = max(min(money_change, 1000), -1000)  # 限制金钱变化
+                    
+                    # 应用变化
+                    old_wealth = {k: v for k, v in agent.wealth.items()}  # 保存旧值用于比较
+                    
+                    # 更新财富值，确保在合法范围内
+                    agent.wealth["time"] = max(min(agent.wealth["time"] + time_change, 1.0), -1.0)
+                    agent.wealth["social"] = max(min(agent.wealth["social"] + social_change, 1.0), -1.0)
+                    agent.wealth["health"] = max(min(agent.wealth["health"] + health_change, 1.0), -1.0)
+                    agent.wealth["mental"] = max(min(agent.wealth["mental"] + mental_change, 1.0), -1.0)
+                    agent.wealth["money"] = max(agent.wealth["money"] + money_change, 0.0)  # 金钱最小为0
+                    
+                    # 如果有显著变化，输出提示
+                    if (abs(time_change) > 0.05 or abs(social_change) > 0.05 or 
+                        abs(health_change) > 0.05 or abs(mental_change) > 0.05 or 
+                        abs(money_change) > 10.0):
+                        
+                        print(f"{agent.name} 的财富发生变化:")
+                        
+                        if abs(time_change) > 0.05:
+                            change_desc = "增加" if time_change > 0 else "减少"
+                            print(f"  - 时间财富 {old_wealth['time']:.2f} -> {agent.wealth['time']:.2f} ({change_desc})")
+                            
+                        if abs(social_change) > 0.05:
+                            change_desc = "增加" if social_change > 0 else "减少"
+                            print(f"  - 社交财富 {old_wealth['social']:.2f} -> {agent.wealth['social']:.2f} ({change_desc})")
+                            
+                        if abs(health_change) > 0.05:
+                            change_desc = "增加" if health_change > 0 else "减少"
+                            print(f"  - 健康财富 {old_wealth['health']:.2f} -> {agent.wealth['health']:.2f} ({change_desc})")
+                            
+                        if abs(mental_change) > 0.05:
+                            change_desc = "增加" if mental_change > 0 else "减少"
+                            print(f"  - 精神财富 {old_wealth['mental']:.2f} -> {agent.wealth['mental']:.2f} ({change_desc})")
+                            
+                        if abs(money_change) > 10.0:
+                            change_desc = "增加" if money_change > 0 else "减少"
+                            print(f"  - 金钱财富 {old_wealth['money']:.2f} -> {agent.wealth['money']:.2f}元 ({change_desc})")
+            except Exception as e:
+                print(f"解析财富变化数据时出错: {e}")
+                
+        except Exception as e:
+            print(f"更新{agent.name}的财富时出错: {e}")
+    
+    print("=== 财富更新完成 ===\n")
 
 def main():
     # 创建命令行参数解析器
@@ -539,6 +597,10 @@ def main():
                       help="是否重新初始化环境描述，默认为否")
     parser.add_argument("--locations", type=int, default=5,
                       help="生成的地点数量，默认为5个")
+    parser.add_argument("--skip-verify", action="store_true", default=False,
+                      help="跳过LLM引擎验证")
+    parser.add_argument("--engine", type=str, default=None,
+                      help="指定使用的LLM引擎类型（qwen, openai, deepseek）")
     
     args = parser.parse_args()
     
@@ -551,6 +613,19 @@ def main():
     print(f"智能体数量: {args.agents}")
     print(f"地点数量: {args.locations}")
     print(f"对话最大参与者数量: {args.max_participants}")
+    
+    # 验证LLM引擎状态
+    if not args.skip_verify:
+        default_engine = verify_llm_engines()
+        
+        # 如果用户没有指定引擎，使用第一个可用的引擎
+        if not args.engine and default_engine:
+            args.engine = default_engine
+            print(f"\n自动选择LLM引擎: {args.engine}")
+    
+    # 如果指定了引擎，设置环境变量
+    if args.engine:
+        os.environ["DEFAULT_LLM_ENGINE"] = args.engine
     
     if args.mode == "new":
         # 重新开始模式：清理环境并创建新的智能体

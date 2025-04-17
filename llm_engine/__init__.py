@@ -5,6 +5,8 @@ LLM引擎初始化模块
 
 import os
 from .factory import LLMEngineFactory
+from .base import BaseLLMEngine
+from .engine_verifier import EngineVerifier
 
 def get_llm_engine(engine_type="qwen"):
     """
@@ -52,5 +54,53 @@ def get_llm_engine(engine_type="qwen"):
     # 创建并返回引擎实例
     return LLMEngineFactory.create_engine(engine_type, **config)
 
-# 导出函数
-__all__ = ["get_llm_engine", "LLMEngineFactory"] 
+# 导出主要类和工厂
+__all__ = ['BaseLLMEngine', 'LLMEngineFactory', 'EngineVerifier']
+
+# 便捷函数，从默认引擎类型创建引擎
+def create_engine(engine_type=None, **kwargs):
+    """
+    从默认引擎类型或环境变量指定的引擎类型创建LLM引擎
+    
+    Args:
+        engine_type: 引擎类型，如果为None则使用环境变量DEFAULT_LLM_ENGINE或默认为"qwen"
+        **kwargs: 传递给引擎构造函数的参数
+        
+    Returns:
+        BaseLLMEngine: LLM引擎实例
+    """
+    # 如果未指定引擎类型，从环境变量获取
+    if engine_type is None:
+        engine_type = os.environ.get("DEFAULT_LLM_ENGINE", "qwen")
+    
+    return LLMEngineFactory.create_engine(engine_type, **kwargs)
+
+# 便捷函数，验证所有引擎
+def verify_engines(display=True):
+    """
+    验证所有LLM引擎的状态
+    
+    Args:
+        display: 是否显示验证结果
+        
+    Returns:
+        Dict: 引擎状态信息
+    """
+    verifier = EngineVerifier()
+    results = verifier.verify_all_engines()
+    
+    if display:
+        verifier.display_status()
+    
+    return results
+
+# 检查是否有requirements.txt中的colorama包
+def _check_dependencies():
+    try:
+        import colorama
+    except ImportError:
+        print("警告: 未安装colorama包，引擎验证器的彩色输出将不可用")
+        print("可以通过运行以下命令安装: pip install colorama")
+
+# 导入时检查依赖
+_check_dependencies() 
