@@ -1,0 +1,14 @@
+{
+  "id": "a611e621-6221-43e4-a6cd-49b2690e2619",
+  "name": "袁磊",
+  "mbti": "ISFP",
+  "background": {
+    "age": 63,
+    "gender": "男",
+    "occupation": "教师",
+    "education": "高中",
+    "hometown": "广州"
+  },
+  "appearance": "一位普通的63岁男性，肤色小麦色，目光炯炯，穿着符合教师身份的休闲服。",
+  "creation_time": 1744896474.525155
+}

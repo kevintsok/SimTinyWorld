@@ -1,0 +1,14 @@
+{
+  "id": "a91fbea8-6212-4e68-92d2-9ea0eda388bc",
+  "name": "秦英",
+  "mbti": "ISFJ",
+  "background": {
+    "age": 68,
+    "gender": "女",
+    "occupation": "医生",
+    "education": "本科",
+    "hometown": "成都"
+  },
+  "appearance": "一位活力四射的68岁女性，肤色健康，目光温和，装扮体现了医生的职业特点。",
+  "creation_time": 1744896490.478843
+}
