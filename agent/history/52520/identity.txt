@@ -1,0 +1,26 @@
+{
+  "id": "52520",
+  "name": "曹志",
+  "mbti": "ISFJ",
+  "background": {
+    "gender": "男",
+    "age": 45,
+    "occupation": "艺术家",
+    "education": "硕士",
+    "hometown": "广东市"
+  },
+  "appearance": "很高，短发，方脸，大眼睛，喜欢运动风格的穿着。",
+  "wealth": {
+    "money": 10000,
+    "time": 0,
+    "social": 0,
+    "health": 0,
+    "mental": 0
+  },
+  "mood": {
+    "value": 0.04,
+    "description": "平静",
+    "last_update": 1745250040.333032
+  },
+  "creation_time": 1745250044.358887
+}

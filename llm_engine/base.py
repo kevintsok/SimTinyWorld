@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, Union, List
 import json
 import os
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 class BaseLLMEngine(ABC):
     """LLM引擎基类，提供通用接口"""
@@ -62,6 +64,46 @@ class BaseLLMEngine(ABC):
             str: 生成的文本
         """
         pass
+    
+    def batch_generate(self, prompts: List[str], think: bool = False, max_workers: int = 10, **kwargs) -> List[str]:
+        """
+        批量生成文本，并行处理多个提示
+        
+        Args:
+            prompts: 输入提示列表
+            think: 是否使用思考模式
+            max_workers: 最大并行工作线程数
+            **kwargs: 其他参数
+            
+        Returns:
+            List[str]: 生成的文本列表
+        """
+        if not prompts:
+            return []
+            
+        # 如果只有一个提示，直接使用单个生成
+        if len(prompts) == 1:
+            return [self.generate(prompts[0], think, **kwargs)]
+        
+        # 使用ThreadPoolExecutor并行处理
+        with ThreadPoolExecutor(max_workers=min(max_workers, len(prompts))) as executor:
+            # 提交所有任务
+            futures = [
+                executor.submit(self.generate, prompt, think, **kwargs)
+                for prompt in prompts
+            ]
+            
+            # 收集结果
+            results = []
+            for future in futures:
+                try:
+                    result = future.result()
+                    results.append(result)
+                except Exception as e:
+                    print(f"批量生成时出错: {e}")
+                    results.append(f"生成出错: {str(e)}")
+            
+            return results
     
     @abstractmethod
     def get_embeddings(self, texts: Union[str, List[str]]) -> Union[List[float], List[List[float]]]:

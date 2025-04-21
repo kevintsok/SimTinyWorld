@@ -33,7 +33,7 @@ ENV/
 
 # Project specific
 config/api_keys.txt
-agents/history/
+agents/history
 *.log
 
 # 忽略API密钥文件

@@ -1,22 +1,51 @@
 import time
 import threading
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass
 import random
 from environment.layout import EnvironmentLayout, EnvironmentVisualizer
 
 @dataclass
 class Location:
+    """世界中的一个位置"""
     name: str
     type: str
     description: str
     connected_locations: List[str]
-    current_agents: List[str]  # 存储当前在该位置的智能体ID
+    current_agents: Set[str]  # 存储agent_id
+    
+    def __init__(self, name: str, type: str, description: str, connected_locations: List[str]):
+        self.name = name
+        self.type = type
+        self.description = description
+        self.connected_locations = connected_locations
+        self.current_agents = set()
 
 class World:
-    """表示智能体所在的世界环境"""
+    """表示智能体活动的世界"""
     
-    def __init__(self, visual_mode=False, location_count=8):
+    # 单例实例
+    _instance = None
+    
+    @classmethod
+    def get_instance(cls):
+        """获取World类的单例实例
+        
+        Returns:
+            Optional[World]: 当前World实例，如果未初始化则返回None
+        """
+        return cls._instance
+    
+    def __init__(self, visual_mode: bool = False, location_count: int = 5):
+        """初始化世界
+        
+        Args:
+            visual_mode: 是否启用可视化模式
+            location_count: 要创建的位置数量
+        """
+        # 设置单例实例
+        World._instance = self
+        
         # 是否使用可视化模式
         self.visual_mode = visual_mode
         
@@ -34,138 +63,196 @@ class World:
                 name=name,
                 type="场所",  # 默认类型
                 description=info["description"],
-                connected_locations=connected_locations,
-                current_agents=[]
+                connected_locations=connected_locations
             )
         
         # 智能体信息缓存
         self.agents = {}  # {agent_id: agent_obj}
         
-        # 创建可视化器（在主线程中运行）
+        # 可视化器相关
         self.visualizer = None
         self.is_visualizer_active = False
+        
+        # 如果启用可视化模式，初始化可视化器
+        if visual_mode:
+            self._init_visualizer()
+            
+    def _create_locations(self, location_count: int):
+        """创建位置
+        
+        已由__init__中的创建布局代码实现，此方法保留以支持修改后的代码
+        """
+        pass
     
     def _init_visualizer(self):
-        """初始化可视化器"""
-        if not self.visual_mode:
-            return
-            
-        if self.visualizer is None:
-            self.visualizer = EnvironmentVisualizer(self.layout)
-            self.is_visualizer_active = True
-            
-            # 不再创建新线程，而是在update_world方法中更新可视化
+        """初始化可视化器
+        
+        在单独线程中启动可视化器，避免阻塞主线程
+        """
+        # 创建可视化器
+        self.visualizer = EnvironmentVisualizer(self.layout)
+        
+        # 在单独线程中启动可视化器
+        self.is_visualizer_active = True
+        viz_thread = threading.Thread(target=self._run_visualizer)
+        viz_thread.daemon = True  # 设为守护线程，这样主程序退出时，此线程也会退出
+        viz_thread.start()
+        
+        # 等待可视化器初始化完成
+        time.sleep(2)
     
-    def update_world(self):
-        """更新世界状态，包括可视化"""
-        if self.visual_mode and self.visualizer and self.is_visualizer_active:
-            self.is_visualizer_active = self.visualizer.update_and_draw()
-        return self.is_visualizer_active
-    
-    def add_agent(self, agent, location: str):
-        """将智能体添加到指定位置"""
-        # 检查位置是否存在
-        if location not in self.locations:
-            print(f"位置 {location} 不存在")
-            return False
+    def _run_visualizer(self):
+        """在单独线程中运行可视化器"""
+        if self.visualizer:
+            self.visualizer.run()
+            
+    def add_agent(self, agent_id: str, agent_obj, initial_location: str = None):
+        """添加智能体到世界
         
-        # 将智能体添加到位置
-        self.locations[location].current_agents.append(agent.id)
+        Args:
+            agent_id: 智能体ID
+            agent_obj: 智能体对象
+            initial_location: 初始位置名称，如果为None，则随机选择一个位置
+        """
+        # 存储智能体对象
+        self.agents[agent_id] = agent_obj
         
-        # 缓存智能体信息
-        self.agents[agent.id] = agent
+        # 如果未指定初始位置，随机选择一个
+        if initial_location is None:
+            initial_location = random.choice(list(self.locations.keys()))
         
-        # 初始化可视化器（仅在可视化模式下）
-        self._init_visualizer()
+        # 检查指定的位置是否存在
+        if initial_location not in self.locations:
+            raise ValueError(f"位置 '{initial_location}' 不存在")
         
-        # 添加智能体到可视化器（仅在可视化模式下）
+        # 将智能体添加到指定位置
+        self.locations[initial_location].current_agents.add(agent_id)
+        
+        # 如果开启了可视化，添加智能体到可视化器
         if self.visual_mode and self.visualizer:
-            self.visualizer.add_agent(agent.id, agent.name, location)
+            self.visualizer.add_agent(agent_id, initial_location)
         
-        # 添加到智能体记忆
-        agent.add_memory(
-            f"我来到了{location}。{self.locations[location].description}",
-            is_long_term=True
-        )
-        
-        return True
+        return initial_location
     
     def move_agent(self, agent_id: str, target_location: str) -> bool:
-        """将智能体从当前位置移动到目标位置"""
-        # 检查智能体是否存在
-        if agent_id not in self.agents:
-            print(f"智能体 {agent_id} 不存在")
-            return False
+        """将智能体移动到新位置
         
+        Args:
+            agent_id: 智能体ID
+            target_location: 目标位置名称
+            
+        Returns:
+            bool: 移动是否成功
+        """
         # 检查目标位置是否存在
         if target_location not in self.locations:
-            print(f"位置 {target_location} 不存在")
+            print(f"警告：位置 '{target_location}' 不存在")
             return False
         
-        # 获取智能体当前位置
+        # 找出智能体当前位置
         current_location = None
-        for name, location in self.locations.items():
+        for loc_name, location in self.locations.items():
             if agent_id in location.current_agents:
-                current_location = name
+                current_location = loc_name
                 break
         
-        # 如果未找到当前位置，说明智能体不在任何位置
         if current_location is None:
-            print(f"智能体 {agent_id} 不在任何位置")
+            print(f"警告：智能体 '{agent_id}' 不在任何位置")
             return False
         
-        # 检查当前位置和目标位置是否有连接
-        if target_location not in self.layout.get_connected_locations(current_location):
-            print(f"{current_location} 和 {target_location} 之间没有直接连接")
-            return False
+        # 检查是否可以移动到目标位置
+        if target_location not in self.locations[current_location].connected_locations:
+            # 使用布局计算目标位置是否可以访问
+            distance = self.layout.get_distance(current_location, target_location)
+            if distance is None or distance > 1:  # 距离为1表示直接相连
+                print(f"警告：智能体不能从 '{current_location}' 直接移动到 '{target_location}'")
+                return False
         
         # 从当前位置移除智能体
         self.locations[current_location].current_agents.remove(agent_id)
         
-        # 将智能体添加到目标位置
-        self.locations[target_location].current_agents.append(agent_id)
+        # 添加智能体到新位置
+        self.locations[target_location].current_agents.add(agent_id)
         
-        # 更新可视化器中的智能体位置（仅在可视化模式下）
+        # 如果开启了可视化，更新可视化器中的智能体位置
         if self.visual_mode and self.visualizer:
-            # 获取两地之间的距离作为动画时长
-            distance = self.layout.get_distance(current_location, target_location)
-            # 确保distance是数字类型，并且处理None情况
-            if distance is None:
-                duration = 1.0  # 默认动画时长
-            else:
-                try:
-                    duration = float(distance) * 0.5  # 距离越大，动画时间越长
-                except (TypeError, ValueError):
-                    # 如果distance不能转换为float，使用默认值
-                    duration = 1.0
-            self.visualizer.move_agent(agent_id, target_location, duration)
-        
-        # 添加移动记忆
-        agent = self.agents[agent_id]
-        agent.add_memory(
-            f"我从{current_location}移动到了{target_location}。{self.locations[target_location].description}",
-            is_long_term=True
-        )
+            self.visualizer.move_agent(agent_id, target_location)
         
         return True
     
-    def get_agents_at_location(self, location: str) -> List[Any]:
-        """获取在指定位置的所有智能体"""
-        if location not in self.locations:
+    def get_agents_at_location(self, location_name: str) -> List[str]:
+        """获取指定位置的所有智能体ID
+        
+        Args:
+            location_name: 位置名称
+            
+        Returns:
+            List[str]: 智能体ID列表
+        """
+        if location_name not in self.locations:
+            print(f"警告：位置 '{location_name}' 不存在")
             return []
         
-        return [self.agents[agent_id] for agent_id in self.locations[location].current_agents
-                if agent_id in self.agents]
+        return list(self.locations[location_name].current_agents)
     
-    def get_connected_locations(self, location: str) -> List[str]:
-        """获取与指定位置直接相连的所有位置"""
-        return self.layout.get_connected_locations(location)
+    def get_agent_location(self, agent_id: str) -> Optional[str]:
+        """获取智能体当前位置
+        
+        Args:
+            agent_id: 智能体ID
+            
+        Returns:
+            Optional[str]: 位置名称，如果智能体不存在则返回None
+        """
+        for loc_name, location in self.locations.items():
+            if agent_id in location.current_agents:
+                return loc_name
+        return None
     
-    def add_agent_dialog(self, agent_name: str, text: str):
-        """在可视化器中添加智能体对话"""
+    def get_location_description(self, location_name: str) -> Optional[str]:
+        """获取位置描述
+        
+        Args:
+            location_name: 位置名称
+            
+        Returns:
+            Optional[str]: 位置描述，如果位置不存在则返回None
+        """
+        if location_name not in self.locations:
+            print(f"警告：位置 '{location_name}' 不存在")
+            return None
+        
+        return self.locations[location_name].description
+    
+    def get_connected_locations(self, location_name: str) -> List[str]:
+        """获取与指定位置相连的所有位置
+        
+        Args:
+            location_name: 位置名称
+            
+        Returns:
+            List[str]: 相连位置名称列表
+        """
+        if location_name not in self.locations:
+            print(f"警告：位置 '{location_name}' 不存在")
+            return []
+        
+        return self.locations[location_name].connected_locations
+    
+    def add_dialog(self, agent_id: str, text: str):
+        """添加对话气泡到可视化器
+        
+        Args:
+            agent_id: 智能体ID
+            text: 对话内容
+        """
         if self.visual_mode and self.visualizer:
-            self.visualizer.add_dialog(agent_name, text)
+            self.visualizer.add_dialog(agent_id, text)
     
-    def get_random_location(self) -> str:
-        """随机返回一个位置名称"""
-        return random.choice(list(self.locations.keys())) 
+    def get_all_locations(self) -> List[str]:
+        """获取所有位置名称
+        
+        Returns:
+            List[str]: 所有位置名称的列表
+        """
+        return list(self.locations.keys()) 
