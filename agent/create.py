@@ -96,7 +96,7 @@ def create_new_agents(num_agents=20):
     # 职业列表
     occupations = ["学生", "教师", "医生", "工程师", "律师", "会计", "销售", "设计师", 
                   "程序员", "记者", "作家", "艺术家", "演员", "音乐家", "厨师", "健身教练",
-                  "企业家", "研究员", "公务员", "自由职业者"]
+                  "企业家", "研究员", "公务员", "自由职业者", "工人", "服务员", "农民", "司机"]
     
     # MBTI类型
     mbti_types = ["INTJ", "INTP", "ENTJ", "ENTP", "INFJ", "INFP", "ENFJ", "ENFP",
@@ -117,12 +117,52 @@ def create_new_agents(num_agents=20):
         
         # 生成基本背景信息
         age = random.randint(18, 65)
-        occupation = random.choice(occupations)
-        mbti = random.choice(mbti_types)
         
-        # 教育程度
-        education_levels = ["高中", "大专", "本科", "硕士", "博士"]
-        education = random.choice(education_levels)
+        # 教育程度 - 根据中国实际人口分布加权
+        education_levels = ["初中及以下", "高中", "大专", "本科", "硕士", "博士"]
+        # 根据中国教育部2022年统计数据和人口分布估算的比例
+        education_weights = [15, 35, 25, 20, 4, 1]  # 总和为100
+        education = random.choices(education_levels, weights=education_weights, k=1)[0]
+        
+        # 根据年龄调整教育程度的合理性
+        if age < 22 and education in ["硕士", "博士"]:
+            education = random.choices(["高中", "大专", "本科"], weights=[40, 35, 25], k=1)[0]
+        elif age < 25 and education == "博士":
+            education = random.choices(["本科", "硕士"], weights=[70, 30], k=1)[0]
+        elif age < 20 and education == "本科":
+            education = random.choices(["初中及以下", "高中", "大专"], weights=[20, 50, 30], k=1)[0]
+        
+        # 职业选择与教育程度关联
+        if education == "博士":
+            suitable_occupations = ["教师", "医生", "研究员", "企业家", "公务员"]
+        elif education == "硕士":
+            suitable_occupations = ["教师", "医生", "工程师", "律师", "会计", "程序员", "研究员", "企业家", "公务员"]
+        elif education == "本科":
+            suitable_occupations = ["教师", "医生", "工程师", "律师", "会计", "销售", "设计师", "程序员", 
+                                   "记者", "作家", "企业家", "公务员", "自由职业者"]
+        elif education == "大专":
+            suitable_occupations = ["销售", "设计师", "程序员", "记者", "作家", "艺术家", "演员", "音乐家",
+                                   "厨师", "健身教练", "公务员", "自由职业者", "工人", "服务员", "司机"]
+        elif education == "高中":
+            suitable_occupations = ["销售", "厨师", "健身教练", "自由职业者", "工人", "服务员", "农民", "司机"]
+        else:  # 初中及以下
+            suitable_occupations = ["工人", "服务员", "农民", "司机", "自由职业者"]
+            
+        # 如果是学生，特殊处理
+        if age <= 22:
+            # 年轻人有较高概率是学生
+            if random.random() < 0.6:
+                occupation = "学生"
+            else:
+                occupation = random.choice(suitable_occupations)
+        else:
+            # 90%概率选择匹配教育程度的职业，10%概率随机选择任意职业（表现社会多样性）
+            if random.random() < 0.9:
+                occupation = random.choice(suitable_occupations)
+            else:
+                occupation = random.choice(occupations)
+        
+        mbti = random.choice(mbti_types)
         
         # 家乡（简单的省市组合）
         provinces = ["北京", "上海", "广东", "江苏", "浙江", "山东", "四川", "湖北", "湖南", "河南"]
@@ -160,6 +200,10 @@ def create_new_agents(num_agents=20):
     # 保存智能体身份信息
     for agent in agents:
         agent.save_identity()
+        
+    # 为每个智能体生成初始长期记忆
+    for agent in agents:
+        generate_initial_memories(agent)
     
     return agents
     
@@ -204,6 +248,201 @@ def _generate_appearance(gender):
     
     return appearance
 
+def generate_initial_memories(agent):
+    """基于智能体的年龄和背景生成初始长期记忆
+    
+    Args:
+        agent: 需要生成记忆的智能体
+    """
+    # 检查长期记忆文件是否存在且为空
+    longterm_file = f"{agent.vector_store_dir}/long.txt"
+    
+    # 如果文件已存在且不为空，直接返回
+    if os.path.exists(longterm_file) and os.path.getsize(longterm_file) > 0:
+        return
+        
+    # 确保目录存在
+    os.makedirs(os.path.dirname(longterm_file), exist_ok=True)
+    
+    # 如果缺少必要的属性，直接返回
+    if not hasattr(agent, 'age') or not agent.age or not agent.background or not agent.name:
+        print(f"无法为{agent.id}生成初始记忆：缺少年龄或背景信息")
+        return
+        
+    try:
+        # 根据年龄确定生成的记忆数量
+        age = int(agent.age)
+        # 儿童记忆较少，成年人记忆较多
+        if age < 18:
+            memory_count = max(3, age // 3)  # 6岁=2条，9岁=3条，15岁=5条
+        elif age < 30:
+            memory_count = 6 + (age - 18) // 2  # 24岁=9条，29岁=11条
+        elif age < 50:
+            memory_count = 12 + (age - 30) // 3  # 40岁=15条，47岁=17条
+        else:
+            memory_count = 18 + (age - 50) // 5  # 50岁=18条，65岁=21条
+            
+        # 最多生成30条记忆
+        memory_count = min(memory_count, 30)
+        
+        # 获取智能体基本信息
+        gender = agent.gender or agent.background.get('gender', '未知')
+        occupation = agent.background.get('occupation', '未知职业')
+        education = agent.background.get('education', '未知')
+        hometown = agent.background.get('hometown', '未知')
+        
+        # 构建提示
+        prompt = f"""请为一个虚拟角色生成{memory_count}条长期记忆。
+
+角色信息:
+- 姓名: {agent.name}
+- 性别: {gender}
+- 年龄: {age}岁
+- 职业: {occupation}
+- 教育程度: {education}
+- 家乡: {hometown}
+- MBTI性格: {agent.mbti}
+- 其他背景: {agent.background.get('description', '')}
+
+生成要求:
+1. 生成{memory_count}条重要的长期记忆，这些记忆应该是角色人生中的关键片段
+2. 记忆应按时间顺序排列，从早期记忆到近期记忆
+3. 包含童年、青少年时期、成年早期、近期等不同人生阶段的记忆
+4. 记忆应与角色的职业发展、教育经历、重要人际关系相关
+5. 每条记忆应该是1-2句话，具体且有情感色彩
+6. 使用第一人称"我"描述这些记忆
+7. 符合角色的MBTI性格特点
+8. 每条记忆独立成行，不要编号
+
+记忆类型应包括:
+- 重要的第一次经历
+- 职业上的成就或挫折
+- 重要的人际关系发展
+- 人生转折点
+- 具有情感意义的事件
+
+记忆示例格式:
+我5岁时第一次上台表演，紧张得几乎忘记了所有台词，但最后还是完成了演出。
+大学三年级时我认识了我的挚友李明，他帮我度过了学业最困难的时期。
+我28岁获得了第一次工作晋升，那天晚上我兴奋得几乎一夜未眠。
+
+注意:
+- 不要包含任何与输出格式无关的文字
+- 直接输出记忆内容，每条一行
+- 确保记忆符合角色的年龄、背景和性格
+"""
+
+        # 获取LLM生成的记忆
+        memories = agent._generate_with_llm(prompt)
+        
+        # 如果生成成功
+        if memories and memories.strip():
+            # 分割成单独的记忆条目
+            memory_items = [m.strip() for m in memories.split('\n') if m.strip()]
+            
+            # 过滤掉可能的编号和无关信息
+            filtered_memories = []
+            for memory in memory_items:
+                # 移除可能的编号前缀
+                if memory and memory[0].isdigit() and len(memory) > 2 and memory[1:3] in ['. ', '、', '：', ': ']:
+                    memory = memory[3:].strip()
+                
+                # 如果记忆不以"我"开头，添加前缀
+                if memory and not memory.startswith('我'):
+                    memory = f"我{memory}"
+                    
+                if memory:  # 确保记忆不为空
+                    filtered_memories.append(memory)
+            
+            # 将记忆保存到长期记忆
+            if filtered_memories:
+                with open(longterm_file, "w", encoding="utf-8") as f:
+                    f.write('\n'.join(filtered_memories))
+                print(f"为{agent.name}生成了{len(filtered_memories)}条初始长期记忆")
+                
+                # 更新智能体的长期记忆
+                agent.long_term_memory = filtered_memories
+                
+                # 更新向量存储
+                agent._update_vector_store()
+                return
+        
+        # 如果生成失败，使用基础记忆
+        generate_basic_memories(agent)
+            
+    except Exception as e:
+        print(f"生成初始长期记忆时出错: {e}")
+        generate_basic_memories(agent)
+
+def generate_basic_memories(agent):
+    """生成基础的长期记忆，当LLM生成失败时使用
+    
+    Args:
+        agent: 需要生成记忆的智能体
+    """
+    # 检查长期记忆文件路径
+    longterm_file = f"{agent.vector_store_dir}/long.txt"
+    
+    # 基于年龄和背景生成基础记忆
+    try:
+        age = int(agent.age)
+        gender = agent.gender or agent.background.get('gender', '男')
+        occupation = agent.background.get('occupation', '职员')
+        
+        basic_memories = []
+        
+        # 童年记忆
+        if age > 5:
+            basic_memories.append(f"我5岁时第一次上学，感到既兴奋又紧张。")
+        if age > 10:
+            basic_memories.append(f"我10岁时获得了第一个学习奖项，父母非常自豪。")
+            
+        # 青少年记忆
+        if age > 15:
+            basic_memories.append(f"我初中时结交了一些好朋友，我们经常一起玩耍和学习。")
+        if age > 18:
+            basic_memories.append(f"我高中毕业那天，和同学们一起庆祝，充满对未来的憧憬。")
+            
+        # 早期成人记忆
+        if age > 22:
+            basic_memories.append(f"我大学期间努力学习专业知识，为未来的职业生涯打下基础。")
+        if age > 25:
+            basic_memories.append(f"我第一份工作是{occupation}，刚开始工作时充满热情但也面临挑战。")
+            
+        # 职业相关记忆
+        if age > 30:
+            basic_memories.append(f"我在工作中经历了第一次晋升，认识到专业能力的重要性。")
+        if age > 35:
+            basic_memories.append(f"我在工作中遇到了一些困难，但通过努力最终克服了。")
+            
+        # 中年记忆
+        if age > 40:
+            basic_memories.append(f"随着年龄增长，我开始重新审视生活的优先级，更注重生活质量。")
+        if age > 50:
+            basic_memories.append(f"步入中年后，我开始关注健康问题，调整了生活习惯。")
+            
+        # 近期记忆
+        basic_memories.append(f"最近几年，我尝试在工作和生活中寻找平衡，学会享受当下。")
+        basic_memories.append(f"我一直在思考如何能够在我的领域有所建树，留下一些成就。")
+        
+        # 保存基础记忆
+        with open(longterm_file, "w", encoding="utf-8") as f:
+            f.write('\n'.join(basic_memories))
+        print(f"为{agent.name}生成了{len(basic_memories)}条基础长期记忆")
+        
+        # 更新智能体的长期记忆
+        agent.long_term_memory = basic_memories
+        
+        # 更新向量存储
+        agent._update_vector_store()
+        
+    except Exception as e:
+        print(f"生成基础记忆时出错: {e}")
+        # 创建空记忆文件
+        with open(longterm_file, "w", encoding="utf-8") as f:
+            f.write("")
+        agent.long_term_memory = []
+
 def load_existing_agents(num_agents=None):
     """加载已存在的智能体
     
@@ -229,6 +468,14 @@ def load_existing_agents(num_agents=None):
             agents.append(agent)
             print(f"已加载智能体: {agent.name}（{agent.mbti}，{agent.background['gender']}）")
             print(f"外貌: {agent.appearance}")
+            
+            # 确保agent有vector_store_dir属性
+            if not hasattr(agent, 'vector_store_dir') or not agent.vector_store_dir:
+                agent.vector_store_dir = f"agent/history/{agent.id}/vector_store"
+                os.makedirs(agent.vector_store_dir, exist_ok=True)
+            
+            # 确保加载的智能体也有初始长期记忆
+            generate_initial_memories(agent)
         except Exception as e:
             print(f"加载智能体 {agent_info['name']} 失败: {str(e)}")
     

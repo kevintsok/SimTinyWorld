@@ -97,7 +97,7 @@ class QwenEngine(BaseLLMEngine):
             elif "告别" in prompt or "道别" in prompt:
                 return "时间不早了，我得先走了。下次再聊！"
             else:
-                return "这个问题很有趣，我需要好好思考一下。"
+                return "。"
                 
         try:
             # 获取系统提示，基于是否使用思考模式

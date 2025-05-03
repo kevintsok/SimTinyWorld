@@ -77,6 +77,31 @@ class World:
         if visual_mode:
             self._init_visualizer()
             
+    def init_locations(self, location_names):
+        """初始化位置
+        
+        Args:
+            location_names: 要创建的位置名称列表
+        """
+        # 重新初始化布局
+        self.layout = EnvironmentLayout(location_count=len(location_names))
+        
+        # 清空现有位置
+        self.locations = {}
+        
+        # 从布局创建位置对象
+        for name, info in self.layout.locations.items():
+            # 获取与该位置相连的位置列表
+            connected_locations = self.layout.get_connected_locations(name)
+            
+            # 创建位置对象，使用默认类型和从布局中获取的描述
+            self.locations[name] = Location(
+                name=name,
+                type="场所",  # 默认类型
+                description=info["description"],
+                connected_locations=connected_locations
+            )
+            
     def _create_locations(self, location_count: int):
         """创建位置
         
@@ -134,42 +159,57 @@ class World:
         
         return initial_location
     
-    def move_agent(self, agent_id: str, target_location: str) -> bool:
+    def add_agent_to_location(self, agent, location):
+        """将智能体添加到指定位置（兼容性方法）
+        
+        Args:
+            agent: 智能体对象
+            location: 位置名称
+            
+        Returns:
+            str: 添加的位置名称
+        """
+        return self.add_agent(agent.id, agent, location)
+    
+    def move_agent(self, agent, from_location: str, target_location: str) -> bool:
         """将智能体移动到新位置
         
         Args:
-            agent_id: 智能体ID
+            agent: 智能体对象或智能体ID
+            from_location: 当前位置名称
             target_location: 目标位置名称
             
         Returns:
             bool: 移动是否成功
         """
+        # 确定智能体ID
+        agent_id = agent.id if hasattr(agent, 'id') else agent
+        
         # 检查目标位置是否存在
         if target_location not in self.locations:
             print(f"警告：位置 '{target_location}' 不存在")
             return False
         
-        # 找出智能体当前位置
-        current_location = None
-        for loc_name, location in self.locations.items():
-            if agent_id in location.current_agents:
-                current_location = loc_name
-                break
+        # 检查当前位置是否存在
+        if from_location not in self.locations:
+            print(f"警告：位置 '{from_location}' 不存在")
+            return False
         
-        if current_location is None:
-            print(f"警告：智能体 '{agent_id}' 不在任何位置")
+        # 检查智能体是否在当前位置
+        if agent_id not in self.locations[from_location].current_agents:
+            print(f"警告：智能体 '{agent_id}' 不在位置 '{from_location}'")
             return False
         
         # 检查是否可以移动到目标位置
-        if target_location not in self.locations[current_location].connected_locations:
+        if target_location not in self.locations[from_location].connected_locations:
             # 使用布局计算目标位置是否可以访问
-            distance = self.layout.get_distance(current_location, target_location)
+            distance = self.layout.get_distance(from_location, target_location)
             if distance is None or distance > 1:  # 距离为1表示直接相连
-                print(f"警告：智能体不能从 '{current_location}' 直接移动到 '{target_location}'")
+                print(f"警告：智能体不能从 '{from_location}' 直接移动到 '{target_location}'")
                 return False
         
         # 从当前位置移除智能体
-        self.locations[current_location].current_agents.remove(agent_id)
+        self.locations[from_location].current_agents.remove(agent_id)
         
         # 添加智能体到新位置
         self.locations[target_location].current_agents.add(agent_id)

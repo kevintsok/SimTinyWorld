@@ -59,7 +59,7 @@ def main():
                       help="是否使用可视化模式，默认为终端模式")
     parser.add_argument("--agents", type=int, default=20,
                       help="智能体数量，默认为20")
-    parser.add_argument("--max-participants", type=int, default=4,
+    parser.add_argument("--max-participants", type=int, default=5,
                       help="一次对话最多参与者数量，默认为4")
     parser.add_argument("--reinit-env", action="store_true", default=False,
                       help="是否重新初始化环境描述，默认为否")
@@ -107,12 +107,13 @@ def main():
         agents = load_existing_agents(args.agents)
     
     # 运行模拟
-    run_simulation(agents, rounds=args.rounds, visual_mode=args.visual, 
+    agents = run_simulation(agents, rounds=args.rounds, visual_mode=args.visual, 
                   max_conversation_participants=args.max_participants,
-                  environment_init=args.reinit_env,
+                  environment_init=not args.continue_mode,
                   location_count=args.locations)
     
     print("\n模拟结束")
+    print("所有模拟日志和对话已保存到logs目录")
 
 if __name__ == "__main__":
     main() 

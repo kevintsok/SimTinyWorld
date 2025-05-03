@@ -58,12 +58,17 @@ class EnvironmentDescriptions:
         # 构建提示词
         prompt = f"""
 请为以下地点生成详细、生动的环境描述，每个描述应当包含环境的视觉、听觉、嗅觉等感官信息，以及可能的氛围和活动。
-每个描述应当在50-100字之间。
+每个描述应当在100-200字之间。
 
 地点列表：
 {', '.join(self.default_locations)}
 
-请以JSON格式输出，键为地点名称，值为对应的环境描述。
+请以JSON格式输出，键为地点名称，值为对应的环境描述。不要包含任何其他文字说明，只输出JSON。
+例如：
+{{
+  "地点1": "这里是地点1的环境描述...",
+  "地点2": "这里是地点2的环境描述..."
+}}
 """
         
         try:
@@ -73,28 +78,32 @@ class EnvironmentDescriptions:
             if response is None or not response.strip():
                 print("LLM返回空响应，使用默认环境描述")
                 raise ValueError("空响应")
+            
+            # 尝试提取JSON部分
+            try:
+                # 查找JSON开始和结束的位置
+                json_start = response.find('{')
+                json_end = response.rfind('}') + 1
                 
-            # 尝试解析JSON响应
-            self.descriptions = json.loads(response)
-            # 确保所有默认地点都有描述
-            for location in self.default_locations:
-                if location not in self.descriptions:
-                    self.descriptions[location] = f"一个{location}环境，周围的人们正在进行各种活动。"
-            return True
+                if json_start >= 0 and json_end > json_start:
+                    json_str = response[json_start:json_end]
+                    self.descriptions = json.loads(json_str)
+                else:
+                    raise ValueError("未找到有效的JSON内容")
+                
+                # 确保所有默认地点都有描述
+                for location in self.default_locations:
+                    if location not in self.descriptions:
+                        self.descriptions[location] = f"一个{location}环境，周围的人们正在进行各种活动。"
+                return True
+            except json.JSONDecodeError as je:
+                print(f"JSON解析错误: {je}, 响应内容: {response[:100]}...")
+                raise
         except Exception as e:
             print(f"解析环境描述失败: {e}")
-            # 创建默认描述
-            self.descriptions = {
-                "公司": "一个现代化的办公大楼，员工们正忙碌地工作，空气中弥漫着咖啡的香气，电脑键盘的敲击声此起彼伏。",
-                "公园": "一片绿意盎然的开放空间，有湖泊、林荫小道和休闲区，人们在这里散步、锻炼或静坐冥想。",
-                "学校": "充满年轻活力的教育场所，教学楼、操场和图书馆一应俱全，学生们穿梭其间，不时传来朗朗读书声。",
-                "医院": "整洁明亮的医疗环境，医护人员快速走动，各种仪器发出轻微的声响，空气中有淡淡的消毒水味道。",
-                "餐厅": "温馨舒适的用餐环境，桌椅整齐排列，饭菜的香气四溢，厨师和服务员忙碌地穿梭其间。",
-                "商场": "灯火通明的购物天堂，橱窗里展示着各种商品，顾客们在不同店铺间挑选，背景音乐轻柔地播放着。",
-                "图书馆": "宁静肃穆的知识殿堂，书架上整齐排列着各类书籍，读者们专注地阅读或在电脑前查询资料。",
-                "健身房": "充满活力的运动场所，各种健身器材一应俱全，人们正在跑步、举重或做瑜伽，汗水和努力的气息弥漫。"
-            }
-            return True
+            # 使用默认描述
+            self.descriptions = {location: f"一个{location}环境，周围的人们正在进行各种活动。" for location in self.default_locations}
+            return False
     
     def generate_topics(self):
         """使用LLM生成每个环境的对话话题"""
@@ -174,6 +183,17 @@ class EnvironmentDescriptions:
             str: 环境描述
         """
         return self.descriptions.get(location, f"一个{location}环境，周围的人们正在进行各种活动。")
+    
+    def get_location_desc(self, location):
+        """获取指定地点的环境描述（get_description的别名）
+        
+        Args:
+            location: 地点名称
+            
+        Returns:
+            str: 环境描述
+        """
+        return self.get_description(location)
     
     def get_topics(self, location):
         """获取指定地点的对话话题

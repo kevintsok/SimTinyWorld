@@ -74,26 +74,38 @@ class BaseAgent:
         self.background = background
         self.appearance = appearance
         
+        # 设置终极目标
+        self.ultimate_goal = "繁衍"  # 智能体的终极目标是繁衍
+        
         # 状态和位置相关
         self.status = "空闲"  # 默认状态为空闲
         self.current_plan = None  # 当前行动计划
         self.plan_index = 0  # 计划步骤索引
         
+        # 初始化LLM引擎（需要在初始化财富之前）
+        self.llm_engine = engine or EngineVerifier().get_first_available_engine()
+        
         # 初始化财富
-        default_wealth = {
-            "money": 10000,  # 金钱
-            "time": 0,  # 时间财富（正值表示充裕，负值表示紧张）
-            "social": 0,  # 社交财富
-            "health": 0,  # 健康财富
-            "mental": 0  # 心理财富
-        }
-        self.wealth = init_wealth if init_wealth else default_wealth
+        if init_wealth:
+            self.wealth = init_wealth
+        else:
+            # 只有在背景和外观都设置好的情况下才尝试生成动态财富
+            if self.background and self.appearance and self.name and self.mbti:
+                # 尝试生成个性化财富
+                try:
+                    self.wealth = self._generate_default_wealth()  # 先生成默认财富以防生成失败
+                    dynamic_wealth = self._generate_wealth()  # 尝试生成动态财富
+                    if dynamic_wealth:  # 如果生成成功，使用动态财富
+                        self.wealth = dynamic_wealth
+                except Exception as e:
+                    print(f"生成财富时出错: {e}，使用随机默认财富")
+                    self.wealth = self._generate_default_wealth()
+            else:
+                # 生成随机化的默认财富
+                self.wealth = self._generate_default_wealth()
         
         # 初始化心情系统
         self.mood = self._generate_initial_mood()
-        
-        # 初始化LLM引擎（需要在初始化记忆存储之前）
-        self.llm_engine = engine or EngineVerifier().get_first_available_engine()
         
         # 初始化记忆存储
         self._init_memory_storage(vector_store_dir)
@@ -315,7 +327,7 @@ class BaseAgent:
             
         except Exception as e:
             print(f"生成回复时出错: {e}")
-            return f"（看起来有些犹豫，没有立即回应）"
+            return f""
     
     def _get_response_style_by_mood(self):
         """根据MBTI和当前心情生成回复风格指导"""
@@ -368,38 +380,77 @@ class BaseAgent:
         return style_prompt
     
     def sleep(self):
-        """智能体睡眠，恢复部分属性"""
-        # 记录睡眠
-        self.add_memory("我睡了一晚上觉，感觉得到了休息。")
+        """智能体睡眠，恢复部分属性，评估睡眠质量"""
+        # 获取今天短期记忆和当前心情，用于评估睡眠质量
+        recent_memories = "\n".join(self.short_term_memory[-min(10, len(self.short_term_memory)):])
+        current_mood = self.mood["value"]
+        mood_desc = self.mood["description"]
+        
+        # 使用LLM评估睡眠质量
+        sleep_quality = self._evaluate_sleep_quality(recent_memories, current_mood, mood_desc)
+        
+        # 记录睡眠和质量
+        quality_desc = sleep_quality["description"]
+        quality_score = sleep_quality["score"]
+        self.add_memory(f"我睡了一晚上觉，睡眠质量{quality_desc}。{sleep_quality['reason']}")
         
         # 更新状态
         self.status = "刚醒来"
         
-        # 调整财富值
+        # 基于睡眠质量调整健康和心理财富值
         for wealth_type in ["health", "mental"]:
             current = self.wealth.get(wealth_type, 0)
-            # 睡眠对健康和心理有积极影响，但幅度受当前值影响
-            if current < 0:
-                # 如果当前为负，恢复得更多
-                change = random.uniform(0.1, 0.2)
-            else:
-                # 如果当前为正，恢复较少
-                change = random.uniform(0.05, 0.1)
             
+            # 基础恢复值
+            if current < 0:
+                # 如果当前为负，基础恢复较多
+                base_change = random.uniform(0.08, 0.15)
+            else:
+                # 如果当前为正，基础恢复较少
+                base_change = random.uniform(0.03, 0.08)
+            
+            # 睡眠质量调整因子
+            # 质量越高，恢复越多；质量不佳，恢复减少
+            quality_factor = (quality_score - 3) / 10  # -0.2 到 +0.2 的调整
+            
+            # 最终变化值
+            change = base_change + quality_factor
+            
+            # 健康受睡眠质量影响较大
+            if wealth_type == "health":
+                change *= 1.2
+                
+            # 确保变化在合理范围内
+            change = max(0, change)  # 确保睡眠至少不会减少健康和心理状态
+            
+            # 应用变化
             new_value = min(current + change, 1.0)
             self.wealth[wealth_type] = round(new_value, 2)
         
-        # 调整心情 - 睡眠会使心情向中性方向调整
-        current_mood = self.mood["value"]
+        # 基于睡眠质量调整心情
+        # 优质睡眠会显著改善心情，糟糕睡眠对心情影响有限
+        
+        # 基础心情调整
         if current_mood < 0:
-            # 负面心情会有所改善
-            new_mood = min(current_mood + random.uniform(0.1, 0.3), 0.3)
+            # 负面心情的基础改善
+            base_mood_change = random.uniform(0.05, 0.2)
         elif current_mood > 0.5:
-            # 过于兴奋的心情会平静一些
-            new_mood = max(current_mood - random.uniform(0.1, 0.2), 0.2)
+            # 过于兴奋的心情会平静
+            base_mood_change = -random.uniform(0.05, 0.15)
         else:
             # 中性心情小幅波动
-            new_mood = current_mood + random.uniform(-0.1, 0.1)
+            base_mood_change = random.uniform(-0.1, 0.1)
+        
+        # 睡眠质量对心情的额外影响
+        quality_mood_factor = (quality_score - 3) / 5  # -0.4 到 +0.4 的调整
+        
+        # 最终心情变化
+        mood_change = base_mood_change + quality_mood_factor
+        
+        # 应用心情变化
+        new_mood = current_mood + mood_change
+        # 确保心情在合理范围内
+        new_mood = max(min(new_mood, 1.0), -1.0)
         
         # 更新心情
         self.mood = {
@@ -411,7 +462,141 @@ class BaseAgent:
         # 清空短期记忆并总结为长期记忆
         self._summarize_and_clear_short_term_memory()
         
-        return "睡眠完成，状态已恢复"
+        return f"睡眠完成，睡眠质量{quality_desc}，状态已恢复"
+        
+    def _evaluate_sleep_quality(self, recent_memories: str, mood_value: float, mood_description: str) -> Dict:
+        """评估睡眠质量
+        
+        基于当天的活动、心情状态和MBTI性格特征评估睡眠质量
+        
+        Args:
+            recent_memories: 最近的记忆内容
+            mood_value: 当前的心情值
+            mood_description: 当前的心情描述
+            
+        Returns:
+            Dict: 包含睡眠质量评分(1-5)、描述和原因的字典
+        """
+        # 构建提示
+        prompt = f"""作为睡眠质量评估专家，请为{self.name}评估今晚的睡眠质量。
+
+个人信息:
+- 姓名: {self.name}
+- 性别: {self.gender}
+- 年龄: {self.age}
+- 职业: {self.background.get('occupation', '未知')}
+- MBTI性格: {self.mbti}
+- 当前心情: {mood_description} (值: {mood_value})
+
+今天的经历:
+{recent_memories}
+
+请考虑以下因素评估睡眠质量:
+1. 当天的活动强度和类型
+2. 心理和情绪状态
+3. MBTI人格特质与睡眠的关系
+4. 当天的社交互动情况
+5. 可能的压力源或放松活动
+
+请提供:
+1. 睡眠质量评分(1-5分，1分=很差，2分=较差，3分=一般，4分=良好，5分=非常好)
+2. 简短的睡眠质量描述词(如"良好"、"一般"、"糟糕"等)
+3. 睡眠质量评估的原因(1-2句话)
+
+要求:
+- 基于提供的信息进行合理推断
+- 考虑MBTI性格与睡眠的相关性
+- 只返回JSON格式，不要有其他解释
+
+返回格式示例:
+{{
+  "score": 4,
+  "description": "良好",
+  "reason": "今天活动适度，心情稳定，没有明显压力源"
+}}
+"""
+        
+        try:
+            # 获取LLM生成的睡眠质量评估
+            response = self._generate_with_llm(prompt)
+            
+            # 确保response不为None
+            if not response or not response.strip():
+                return self._get_default_sleep_quality()
+                
+            # 尝试从响应中提取JSON部分
+            response = response.strip()
+            try:
+                # 寻找JSON的开始和结束位置
+                start_idx = response.find('{')
+                end_idx = response.rfind('}') + 1
+                
+                if start_idx >= 0 and end_idx > start_idx:
+                    json_str = response[start_idx:end_idx]
+                    sleep_quality = json.loads(json_str)
+                    
+                    # 验证数据格式
+                    if all(key in sleep_quality for key in ["score", "description", "reason"]):
+                        # 确保分数在1-5范围内
+                        score = max(min(int(sleep_quality["score"]), 5), 1)
+                        
+                        return {
+                            "score": score,
+                            "description": sleep_quality["description"],
+                            "reason": sleep_quality["reason"]
+                        }
+            except:
+                pass
+                
+            # 如果解析失败，使用默认值
+            return self._get_default_sleep_quality()
+                
+        except Exception as e:
+            print(f"评估睡眠质量时出错: {e}")
+            return self._get_default_sleep_quality()
+            
+    def _get_default_sleep_quality(self) -> Dict:
+        """获取默认的睡眠质量评估
+        
+        当LLM评估失败时使用基于当前状态的简单规则生成睡眠质量
+        
+        Returns:
+            Dict: 包含睡眠质量评分、描述和原因的字典
+        """
+        # 基于当前心情生成睡眠质量
+        mood_value = self.mood["value"]
+        
+        if mood_value < -0.5:
+            # 心情很差，睡眠质量较低
+            score = random.randint(1, 2)
+            descriptions = ["很差", "糟糕", "不安"]
+            reasons = ["心情低落，辗转反侧难以入睡", "负面情绪导致多次惊醒", "睡眠浅且不连贯"]
+        elif mood_value < 0:
+            # 心情略差，睡眠质量偏低
+            score = random.randint(2, 3)
+            descriptions = ["一般", "尚可", "较差"]
+            reasons = ["情绪有些波动，影响了入睡", "睡眠较轻，偶有醒来", "没有得到充分的休息"]
+        elif mood_value < 0.5:
+            # 心情中性，睡眠质量中等
+            score = 3
+            descriptions = ["一般", "普通", "还算可以"]
+            reasons = ["入睡正常，睡眠质量一般", "有做梦但不影响休息", "得到了基本的休息"]
+        elif mood_value < 0.8:
+            # 心情良好，睡眠质量不错
+            score = 4
+            descriptions = ["良好", "不错", "舒适"]
+            reasons = ["心情放松，睡眠连贯", "睡眠深沉，醒来精神好", "得到了充分的休息"]
+        else:
+            # 心情很好，睡眠质量极佳
+            score = 5
+            descriptions = ["非常好", "极佳", "完美"]
+            reasons = ["完全放松，一夜好眠", "深度睡眠，醒来神清气爽", "睡眠质量极佳，精力充沛"]
+        
+        return {
+            "score": score,
+            "description": random.choice(descriptions),
+            "reason": random.choice(reasons)
+        }
 
     def _summarize_and_clear_short_term_memory(self):
         """总结短期记忆中的重要内容，将其保存到长期记忆中，并清理短期记忆
@@ -436,10 +621,11 @@ class BaseAgent:
 3. 情感强度高的体验
 4. 与重要目标相关的进展
 5. 特别的新信息或洞察
+6. 与我的终极目标({self.ultimate_goal})相关的进展
 
 对于你({self.name})这样一个{self.background['gender']}性、{self.background['age']}岁{self.background['occupation']}，具有{self.mbti}性格特质的人，请从上述经历中提取3-5条最重要的记忆，并进行简短总结。
 
-按重要性排序输出，每条总结使用一段简洁的文字（30-50字），确保包含相关的时间、地点、人物和事件。
+按重要性排序输出，每条总结使用一段简洁的文字（30-50字），确保包含相关的时间、地点、人物和事件。特别关注那些有助于实现终极目标({self.ultimate_goal})的经历。
 
 输出格式: 每条记忆单独一行，不要编号，直接给出记忆内容。
 """
@@ -498,6 +684,7 @@ class BaseAgent:
     @classmethod
     def from_dict(cls, data, engine=None):
         """从字典创建智能体实例"""
+        # 先创建一个带有基本属性的实例
         agent = cls(
             id=data.get("id"),
             name=data.get("name"),
@@ -507,9 +694,24 @@ class BaseAgent:
             background=data.get("background"),
             appearance=data.get("appearance"),
             vector_store_dir=data.get("vector_store_dir"),
-            init_wealth=data.get("wealth"),
             engine=engine
         )
+        
+        # 单独处理财富，确保在背景和属性设置后生成财富
+        if "wealth" in data and data["wealth"]:
+            agent.wealth = data["wealth"]
+        else:
+            # 尝试生成个性化财富
+            try:
+                agent.wealth = agent._generate_default_wealth()  # 先生成默认财富
+                if hasattr(agent, 'background') and agent.background and agent.appearance:
+                    dynamic_wealth = agent._generate_wealth()  # 尝试生成动态财富
+                    if dynamic_wealth:  # 如果生成成功，使用动态财富
+                        agent.wealth = dynamic_wealth
+            except Exception as e:
+                print(f"从字典生成{agent.name}财富时出错: {e}，使用随机默认财富")
+                agent.wealth = agent._generate_default_wealth()
+                
         agent.status = data.get("status", "空闲")
         agent.current_plan = data.get("current_plan")
         agent.plan_index = data.get("plan_index", 0)
@@ -603,6 +805,8 @@ class BaseAgent:
         identity = {
             "id": self.id,
             "name": self.name,
+            "gender": self.gender,
+            "age": self.age,
             "mbti": self.mbti,
             "background": self.background,
             "appearance": self.appearance,
@@ -641,6 +845,8 @@ class BaseAgent:
         # 手动设置属性，避免调用__init__生成新ID
         agent.id = agent_id
         agent.name = identity["name"]
+        agent.gender = identity.get("gender")
+        agent.age = identity.get("age")
         agent.mbti = identity["mbti"]
         agent.background = identity["background"]
         agent.long_term_memory = []
@@ -723,17 +929,27 @@ class BaseAgent:
         Returns:
             Dict[str, float]: 包含五种财富的字典：时间、社交、健康、精神和金钱
         """
+        # 如果缺少必要信息或背景信息不完整，使用默认值
+        if not hasattr(self, 'background') or not self.background:
+            return self._generate_default_wealth()
+            
         # 构建提示，基于智能体的属性
+        gender = self.gender or self.background.get('gender', '未知')
+        age = self.age or self.background.get('age', 25)
+        occupation = self.background.get('occupation', '未知职业')
+        education = self.background.get('education', '未知')
+        hometown = self.background.get('hometown', '未知')
+        
         prompt = f"""
 作为一位角色财富状态生成器，请为以下角色生成初始财富状态。
 
 角色信息:
 - 姓名: {self.name}
-- 性别: {self.background['gender']}
-- 年龄: {self.background['age']}岁
-- 职业: {self.background['occupation']}
-- 教育程度: {self.background['education']}
-- 家乡: {self.background['hometown']}
+- 性别: {gender}
+- 年龄: {age}岁
+- 职业: {occupation}
+- 教育程度: {education}
+- 家乡: {hometown}
 - MBTI性格: {self.mbti}
 - 外貌: {self.appearance}
 
@@ -746,7 +962,7 @@ class BaseAgent:
    -1.0表示极度不健康，0表示一般健康，1.0表示极度健康（体魄强健）
 4. 精神财富: -1.0到1.0之间的浮点数，表示角色的精神状态和幸福感
    -1.0表示极度匮乏（精神压力大），0表示一般，1.0表示极度丰富（精神愉悦充实）
-5. 金钱财富: 一个非负浮点数，基础为10000.0，表示角色拥有的金钱数量（单位：元）
+5. 金钱财富: 一个非负浮点数，表示角色拥有的金钱数量（单位：元）
    - 学生一般在5000-15000之间
    - 普通职业者一般在10000-50000之间
    - 高收入职业者一般在50000-200000之间
@@ -756,6 +972,7 @@ class BaseAgent:
 1. 请根据角色的背景、年龄、职业、性格特点逻辑推断合理的财富值
 2. 所有值必须在规定范围内，且符合角色设定
 3. 只返回JSON格式的财富数据，不要包含任何解释或其他文字
+4. 确保数值有多样性，体现角色的独特性
 
 返回格式示例:
 {{
@@ -773,11 +990,23 @@ class BaseAgent:
             
             # 确保response不为None
             if not response or not response.strip():
+                print(f"为{self.name}生成财富时LLM返回空响应")
                 return self._generate_default_wealth()
                 
-            # 解析JSON
+            # 尝试从响应中提取JSON部分
+            response = response.strip()
             try:
-                wealth = json.loads(response)
+                # 寻找JSON的开始和结束位置
+                start_idx = response.find('{')
+                end_idx = response.rfind('}') + 1
+                
+                if start_idx >= 0 and end_idx > start_idx:
+                    json_str = response[start_idx:end_idx]
+                    wealth = json.loads(json_str)
+                else:
+                    print(f"为{self.name}生成财富时无法找到有效的JSON")
+                    return self._generate_default_wealth()
+                    
                 # 验证数据格式
                 if all(key in wealth for key in ["time", "social", "health", "mental", "money"]):
                     # 验证数值范围
@@ -788,55 +1017,66 @@ class BaseAgent:
                     money_value = max(float(wealth["money"]), 0.0)
                     
                     return {
-                        "time": time_value,
-                        "social": social_value,
-                        "health": health_value,
-                        "mental": mental_value,
-                        "money": money_value
+                        "time": round(time_value, 2),
+                        "social": round(social_value, 2),
+                        "health": round(health_value, 2),
+                        "mental": round(mental_value, 2),
+                        "money": round(money_value, 2)
                     }
-            except:
-                pass
+                else:
+                    print(f"为{self.name}生成财富时JSON格式不完整: {wealth}")
+            except json.JSONDecodeError as e:
+                print(f"为{self.name}生成财富时JSON解析错误: {e}, 原始响应: {response[:100]}...")
+            except Exception as e:
+                print(f"为{self.name}生成财富时解析出错: {e}")
                 
             # 如果解析失败，使用默认值
             return self._generate_default_wealth()
                 
         except Exception as e:
-            print(f"生成财富数据时出错: {e}")
+            print(f"为{self.name}生成财富数据时出错: {e}")
             return self._generate_default_wealth()
     
     def _generate_default_wealth(self) -> Dict[str, float]:
         """生成默认的财富数据，当LLM生成失败时使用"""
         # 基于职业和年龄设置默认金钱财富
-        occupation = self.background["occupation"]
-        age = self.background["age"]
+        # 为避免固定值，添加随机变化
+        base_money = 10000.0
         
-        # 根据职业设置基础金钱
-        if occupation == "学生":
-            base_money = 8000.0
-        elif occupation in ["工程师", "医生"]:
-            base_money = 30000.0
-        elif occupation == "教师":
-            base_money = 20000.0
-        elif occupation == "艺术家":
-            base_money = 15000.0
-        else:
-            base_money = 10000.0
+        # 如果有背景信息，根据职业和年龄调整基础金钱
+        if hasattr(self, 'background') and self.background:
+            occupation = self.background.get("occupation", "")
+            age = self.background.get("age", 25)
             
-        # 根据年龄调整金钱（25岁以上每增加5岁增加20%）
-        if age > 25:
-            age_factor = 1.0 + ((age - 25) // 5) * 0.2
-            money = base_money * age_factor
+            # 根据职业设置基础金钱
+            if "学生" in occupation:
+                base_money = random.uniform(5000.0, 15000.0)
+            elif any(job in occupation for job in ["工程师", "医生", "律师", "会计师"]):
+                base_money = random.uniform(25000.0, 45000.0)
+            elif any(job in occupation for job in ["教师", "公务员"]):
+                base_money = random.uniform(15000.0, 30000.0)
+            elif any(job in occupation for job in ["艺术家", "作家", "自由职业"]):
+                base_money = random.uniform(8000.0, 25000.0)
+            else:
+                base_money = random.uniform(8000.0, 20000.0)
+                
+            # 根据年龄调整金钱（25岁以上每增加5岁增加15-25%）
+            if age > 25:
+                age_brackets = (age - 25) // 5
+                for _ in range(age_brackets):
+                    base_money *= random.uniform(1.15, 1.25)
         else:
-            money = base_money
+            # 如果没有背景信息，生成随机金钱
+            base_money = random.uniform(8000.0, 30000.0)
             
-        # 随机生成其他财富值
+        # 生成其他财富值，确保有足够的随机性
         return {
-            "time": round(random.uniform(-0.7, 0.7), 2),
-            "social": round(random.uniform(-0.7, 0.7), 2),
-            "health": round(random.uniform(-0.3, 0.8), 2),
-            "mental": round(random.uniform(-0.5, 0.8), 2),
-            "money": round(money, 2)
-        } 
+            "time": round(random.uniform(-0.8, 0.8), 2),  # 更大范围的随机值
+            "social": round(random.uniform(-0.8, 0.8), 2),
+            "health": round(random.uniform(-0.4, 0.9), 2),
+            "mental": round(random.uniform(-0.6, 0.9), 2),
+            "money": round(base_money, 2)
+        }
 
     def _set_plan_from_json(self, plan_json: str, available_locations: List[str], max_rounds: int) -> bool:
         """从JSON字符串设置智能体的计划
@@ -1241,6 +1481,7 @@ class BaseAgent:
 - 教育水平: {self.background['education']}
 - 家乡: {self.background['hometown']}
 - 外貌: {self.appearance}
+- 终极目标: {self.ultimate_goal}
 
 我当前所在位置: {current_location}
 
@@ -1255,13 +1496,15 @@ class BaseAgent:
 
 请根据以上信息，为我制定一个符合我性格特点和背景的一天计划，包括我要去的地点、在每个地点停留的时间和我要做的事情。
 
-计划格式要求:
-1. 分为{max_rounds}个时间段（上午、中午、下午、晚上等）
+计划要求:
+1. 分为{max_rounds}个时间段
 2. 每个时间段指定一个地点（从可用位置中选择）
 3. 每个时间段1-2句话描述我计划做的事情
 4. 行动计划要符合我的MBTI性格和职业背景
 5. 考虑我的近期记忆中的活动和人际互动
 6. 如果我最近与某人有互动，可以考虑安排与他们再次见面
+7. 所有活动都应该直接或间接地服务于我的终极目标：{self.ultimate_goal}
+8. 优先考虑那些能够帮助我实现终极目标的活动和社交互动
 
 请直接输出JSON格式，格式如下:
 [
@@ -1430,7 +1673,7 @@ class BaseAgent:
         self.longterm_file = f"{self.vector_store_dir}/long.txt"
         self.shortterm_file = f"{self.vector_store_dir}/short.txt"
         
-        # 如果文件存在，加载记忆
+        # 加载记忆
         self._load_memories()
         
         # 创建Embeddings对象
@@ -1444,6 +1687,170 @@ class BaseAgent:
         self.vector_store = None
         self._update_vector_store()
         
+    def _generate_initial_long_term_memories(self):
+        """基于智能体的年龄和背景生成初始长期记忆
+        
+        年龄越大，生成的记忆越多，内容与智能体的背景、职业、教育和性格相关
+        """
+        # 如果缺少必要的属性，直接返回
+        if not hasattr(self, 'age') or not self.age or not self.background or not self.name:
+            print(f"无法为{self.id}生成初始记忆：缺少年龄或背景信息")
+            return
+            
+        try:
+            # 根据年龄确定生成的记忆数量
+            age = int(self.age)
+            # 儿童记忆较少，成年人记忆较多
+            if age < 18:
+                memory_count = max(3, age // 3)  # 6岁=2条，9岁=3条，15岁=5条
+            elif age < 30:
+                memory_count = 6 + (age - 18) // 2  # 24岁=9条，29岁=11条
+            elif age < 50:
+                memory_count = 12 + (age - 30) // 3  # 40岁=15条，47岁=17条
+            else:
+                memory_count = 18 + (age - 50) // 5  # 50岁=18条，65岁=21条
+                
+            # 最多生成30条记忆
+            memory_count = min(memory_count, 30)
+            
+            # 获取智能体基本信息
+            gender = self.gender or self.background.get('gender', '未知')
+            occupation = self.background.get('occupation', '未知职业')
+            education = self.background.get('education', '未知')
+            hometown = self.background.get('hometown', '未知')
+            
+            # 构建提示
+            prompt = f"""请为一个虚拟角色生成{memory_count}条长期记忆。
+
+角色信息:
+- 姓名: {self.name}
+- 性别: {gender}
+- 年龄: {age}岁
+- 职业: {occupation}
+- 教育程度: {education}
+- 家乡: {hometown}
+- MBTI性格: {self.mbti}
+- 其他背景: {self.background.get('description', '')}
+
+生成要求:
+1. 生成{memory_count}条重要的长期记忆，这些记忆应该是角色人生中的关键片段
+2. 记忆应按时间顺序排列，从早期记忆到近期记忆
+3. 包含童年、青少年时期、成年早期、近期等不同人生阶段的记忆
+4. 记忆应与角色的职业发展、教育经历、重要人际关系相关
+5. 每条记忆应该是1-2句话，具体且有情感色彩
+6. 使用第一人称"我"描述这些记忆
+7. 符合角色的MBTI性格特点
+8. 每条记忆独立成行，不要编号
+
+记忆类型应包括:
+- 重要的第一次经历
+- 职业上的成就或挫折
+- 重要的人际关系发展
+- 人生转折点
+- 具有情感意义的事件
+
+记忆示例格式:
+我5岁时第一次上台表演，紧张得几乎忘记了所有台词，但最后还是完成了演出。
+大学三年级时我认识了我的挚友李明，他帮我度过了学业最困难的时期。
+我28岁获得了第一次工作晋升，那天晚上我兴奋得几乎一夜未眠。
+
+注意:
+- 不要包含任何与输出格式无关的文字
+- 直接输出记忆内容，每条一行
+- 确保记忆符合角色的年龄、背景和性格
+"""
+
+            # 获取LLM生成的记忆
+            memories = self._generate_with_llm(prompt)
+            
+            # 如果生成成功
+            if memories and memories.strip():
+                # 分割成单独的记忆条目
+                memory_items = [m.strip() for m in memories.split('\n') if m.strip()]
+                
+                # 过滤掉可能的编号和无关信息
+                filtered_memories = []
+                for memory in memory_items:
+                    # 移除可能的编号前缀
+                    if memory[0].isdigit() and memory[1:3] in ['. ', '、', '：', ': ']:
+                        memory = memory[3:].strip()
+                    
+                    # 如果记忆不以"我"开头，添加前缀
+                    if not memory.startswith('我'):
+                        memory = f"我{memory}"
+                        
+                    filtered_memories.append(memory)
+                
+                # 将记忆保存到长期记忆
+                if filtered_memories:
+                    with open(self.longterm_file, "w", encoding="utf-8") as f:
+                        f.write('\n'.join(filtered_memories))
+                    print(f"为{self.name}生成了{len(filtered_memories)}条初始长期记忆")
+                    self.long_term_memory = filtered_memories
+                    return
+            
+            # 如果生成失败，使用基础记忆
+            self._generate_basic_memories()
+                
+        except Exception as e:
+            print(f"生成初始长期记忆时出错: {e}")
+            self._generate_basic_memories()
+            
+    def _generate_basic_memories(self):
+        """生成基础的长期记忆，当LLM生成失败时使用"""
+        # 基于年龄和背景生成基础记忆
+        try:
+            age = int(self.age)
+            gender = self.gender or self.background.get('gender', '男')
+            occupation = self.background.get('occupation', '职员')
+            
+            basic_memories = []
+            
+            # 童年记忆
+            if age > 5:
+                basic_memories.append(f"我5岁时第一次上学，感到既兴奋又紧张。")
+            if age > 10:
+                basic_memories.append(f"我10岁时获得了第一个学习奖项，父母非常自豪。")
+                
+            # 青少年记忆
+            if age > 15:
+                basic_memories.append(f"我初中时结交了一些好朋友，我们经常一起玩耍和学习。")
+            if age > 18:
+                basic_memories.append(f"我高中毕业那天，和同学们一起庆祝，充满对未来的憧憬。")
+                
+            # 早期成人记忆
+            if age > 22:
+                basic_memories.append(f"我大学期间努力学习专业知识，为未来的职业生涯打下基础。")
+            if age > 25:
+                basic_memories.append(f"我第一份工作是{occupation}，刚开始工作时充满热情但也面临挑战。")
+                
+            # 职业相关记忆
+            if age > 30:
+                basic_memories.append(f"我在工作中经历了第一次晋升，认识到专业能力的重要性。")
+            if age > 35:
+                basic_memories.append(f"我在工作中遇到了一些困难，但通过努力最终克服了。")
+                
+            # 中年记忆
+            if age > 40:
+                basic_memories.append(f"随着年龄增长，我开始重新审视生活的优先级，更注重生活质量。")
+            if age > 50:
+                basic_memories.append(f"步入中年后，我开始关注健康问题，调整了生活习惯。")
+                
+            # 近期记忆
+            basic_memories.append(f"最近几年，我尝试在工作和生活中寻找平衡，学会享受当下。")
+            basic_memories.append(f"我一直在思考如何能够在我的领域有所建树，留下一些成就。")
+            
+            # 保存基础记忆
+            with open(self.longterm_file, "w", encoding="utf-8") as f:
+                f.write('\n'.join(basic_memories))
+            print(f"为{self.name}生成了{len(basic_memories)}条基础长期记忆")
+            self.long_term_memory = basic_memories
+            
+        except Exception as e:
+            print(f"生成基础记忆时出错: {e}")
+            # 最基本的空记忆
+            self.long_term_memory = []
+    
     def _get_relevant_memory(self, query):
         """获取相关的记忆"""
         if self.vector_store:
