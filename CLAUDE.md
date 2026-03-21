@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a multi-agent social simulation system in Python. Agents with distinct personalities (MBTI), backgrounds, and memories interact in a virtual environment with multiple locations. Supports multiple LLM backends (Qwen, OpenAI, DeepSeek).
+Multi-agent social simulation system where agents with distinct personalities (MBTI), backgrounds, and memories interact in a virtual environment. Supports multiple LLM backends (Qwen, OpenAI, DeepSeek) with FAISS vector storage for memory retrieval.
 
 ## Commands
 
@@ -12,8 +12,11 @@ This is a multi-agent social simulation system in Python. Agents with distinct p
 # Run simulation
 python main.py
 
-# Fast test mode (mock LLM calls)
+# Fast test mode (mock LLM calls, skip API verification)
 python main.py --fast --agents 3 --rounds 2
+
+# Skip LLM verification and use mock mode directly
+python main.py --skip-verify
 
 # Continue existing simulation
 python main.py --mode continue
@@ -25,37 +28,43 @@ python main.py --engine deepseek
 
 # Custom parameters
 python main.py --agents 20 --rounds 5 --locations 3
+
+# Specify scenario
+python main.py --scenario daily_life  # default
 ```
 
 ## Architecture
 
-### Core Abstraction Hierarchy
+### Three Core Abstraction Hierarchies
 
-```
-BaseEntity (ABC)           # simulation/base.py
-    └── BaseAgent (ABC)    # simulation/base.py
-            └── agent/base_agent.py::BaseAgent  (concrete agent with MBTI, memory, wealth)
+**Agent System** (`simulation/base.py` → `agent/base_agent.py`):
+- `BaseEntity` (ABC) - base for all entities
+- `BaseAgent` (ABC) - adds think(), perceive(), act(), memory system, mood, wealth
+- `BaseAgent` (concrete) - MBTI personality, long/short-term memory with FAISS, sleep cycle
 
-BaseEnvironment (ABC)      # simulation/base.py
-            └── environment/world.py::World    (concrete environment with locations)
+**Environment System** (`simulation/base.py` → `environment/world.py`):
+- `BaseEnvironment` (ABC) - add_entity(), remove_entity(), get_neighbors(), tick()
+- `World` (concrete) - manages Location entities with spatial relationships, optional pygame visualization
 
-BaseScenario (ABC)         # simulation/scenarios/base.py
-            └── DailyLifeScenario              (concrete scenario)
-```
+**Scenario System** (`simulation/scenarios/base.py` → `simulation/scenarios/daily_life.py`):
+- `BaseScenario` (ABC) - setup(), get_prompt_for_agent(), evaluate_action(), step()
+- `DailyLifeScenario` - daily planning, movement, conversations, wealth/mood updates
 
 ### Module Structure
 
-- **simulation/** - Framework core: `SimulationEngine`, abstract base classes
-- **simulation/scenarios/** - Scenario implementations (daily_life, emergency, geopolitics, debate)
-- **agent/** - Agent implementation: `BaseAgent` with MBTI personality, memory system, wealth tracking
-- **environment/** - Environment: `World` with `Location` entities, spatial relationships
-- **llm_engine/** - LLM backends: factory pattern with lazy loading for Qwen/OpenAI/DeepSeek
+| Module | Purpose |
+|--------|---------|
+| `simulation/` | Core engine and abstract base classes |
+| `simulation/scenarios/` | Scenario implementations (only `daily_life` currently active) |
+| `agent/` | `BaseAgent` with MBTI, memory (FAISS), wealth tracking |
+| `environment/` | `World` with `Location` entities |
+| `llm_engine/` | Factory + lazy loading for Qwen/OpenAI/DeepSeek |
 
 ### Key Patterns
 
-1. **Factory + Singleton**: `LLMEngineFactory.create_engine()` creates engines; `get_global_engine()` provides singleton access
-2. **Lazy Loading**: Engine classes imported only when first used via `_get_engine_class()`
-3. **Scenario-Based**: `SimulationEngine` runs scenarios that inherit from `BaseScenario`
+- **Factory + Singleton**: `LLMEngineFactory.create_engine()` + `get_global_engine()`
+- **Lazy Loading**: Engine classes imported on first use via `_get_engine_class()`
+- **Thread-safe Simulation**: `SimulationEngine` uses locks for agent management
 
 ### Adding New Scenarios
 
@@ -66,17 +75,11 @@ BaseScenario (ABC)         # simulation/scenarios/base.py
 
 ### Adding New LLM Engines
 
-1. Create engine class extending `BaseLLMEngine` in `llm_engine/`
-2. Implement `generate()`, `chat()`, `mock_mode` property
-3. Register in `llm_engine/factory.py::_get_engine_class()`
+1. Create engine class in `llm_engine/` extending `BaseLLMEngine`
+2. Implement `generate()`, `get_embeddings()`, `mock_mode` property
+3. Add lazy import in `llm_engine/factory.py::_get_engine_class()`
 
 ## Configuration
 
 API keys via environment variables or `llm_engine/config/api_keys.json`:
-- `DASHSCOPE_API_KEY` (Qwen)
-- `OPENAI_API_KEY`
-- `DEEPSEEK_API_KEY`
-
-## Dependencies
-
-Key packages: dashscope, openai, faiss-cpu, langchain, pygame (visualization), colorama
+- `DASHSCOPE_API_KEY` (Qwen), `OPENAI_API_KEY`, `DEEPSEEK_API_KEY`
