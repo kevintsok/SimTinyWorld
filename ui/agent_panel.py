@@ -206,34 +206,41 @@ class AgentPanel:
 
     def _init_settings_components(self, base_x: int, base_y: int):
         """初始化设置界面组件"""
+        # 设置面板内的偏移量
+        form_x = 50
+        form_y = 160
+        input_x = form_x + 180
+
         # 智能体数量
         self.text_boxes["agent_count"] = TextBox(
-            rect=pygame.Rect(base_x + 150, base_y + 80, 80, 30),
+            rect=pygame.Rect(input_x, form_y + 30, 80, 30),
             placeholder="3"
         )
 
         # 轮数
         self.text_boxes["rounds"] = TextBox(
-            rect=pygame.Rect(base_x + 150, base_y + 130, 80, 30),
+            rect=pygame.Rect(input_x, form_y + 80, 80, 30),
             placeholder="5"
         )
 
         # 位置数量
         self.text_boxes["locations"] = TextBox(
-            rect=pygame.Rect(base_x + 150, base_y + 180, 80, 30),
+            rect=pygame.Rect(input_x, form_y + 130, 80, 30),
             placeholder="5"
         )
 
-        # 场景选择
-        scenario_names = [name for _, name in self.scenarios]
-        self.dropdowns["scenario"] = Dropdown(
-            rect=pygame.Rect(base_x + 150, base_y + 230, 200, 30),
-            options=scenario_names,
-            title="场景"
+        # 预设主题输入框
+        self.text_boxes["theme"] = TextBox(
+            rect=pygame.Rect(input_x, form_y + 180, 300, 30),
+            placeholder="输入预设主题..."
         )
 
         # 快速模式复选框区域
-        self.fast_mode_rect = pygame.Rect(base_x + 150, base_y + 280, 30, 30)
+        self.fast_mode_rect = pygame.Rect(input_x, form_y + 240, 30, 30)
+
+        # 场景单选项 - 存储在simulation_settings中
+        self.scenario_radio_x = form_x + 30
+        self.scenario_radio_y = form_y + 180
 
     def _show_create_view(self):
         """显示创建视图"""
@@ -470,30 +477,58 @@ class AgentPanel:
 
         # 设置面板
         form_x, form_y = 50, 160
-        pygame.draw.rect(surface, self.panel_bg, (form_x, form_y, 500, 350), border_radius=10)
+        form_width, form_height = 550, 380
+        pygame.draw.rect(surface, self.panel_bg, (form_x, form_y, form_width, form_height), border_radius=10)
 
-        labels = [
-            ("agent_count", "智能体数量:", 0),
-            ("rounds", "模拟轮数:", 50),
-            ("locations", "位置数量:", 100),
-            ("scenario", "场景:", 150)
+        # 标签区域和输入框位置
+        label_x = form_x + 30
+        input_x = form_x + 180  # 输入框起始x位置
+        label_width = input_x - label_x - 10
+
+        # ===== 左列：标签 =====
+        left_labels = [
+            ("智能体数量:", form_y + 30),
+            ("模拟轮数:", form_y + 80),
+            ("位置数量:", form_y + 130),
+            ("场景:", form_y + 180),
+            ("预设主题:", form_y + 220),
+            ("快速模式:", form_y + 270),
         ]
 
-        y_offset = form_y + 30
-        for key, label_text, offset in labels:
+        for label_text, row_y in left_labels:
             label = self.font.render(label_text, True, self.text_color)
-            surface.blit(label, (form_x + 30, y_offset + offset + 5))
+            label_rect = label.get_rect(right=label_x + label_width, centery=row_y + 15)
+            surface.blit(label, label_rect)
 
-            if key in self.text_boxes:
-                self.text_boxes[key].draw(surface)
-            elif key in self.dropdowns:
-                self.dropdowns[key].draw(surface)
+        # ===== 场景单选按钮（绘制在左侧标签下方） =====
+        scenario_y = form_y + 180
+        radio_spacing = 22
+        for i, (scenario_id, scenario_name) in enumerate(self.scenarios):
+            radio_y = scenario_y + 25 + i * radio_spacing
+            is_selected = self.simulation_settings.get("scenario") == scenario_id
+            self._draw_radio_button(surface, self.scenario_radio_x, radio_y, scenario_name, is_selected)
+
+        # ===== 右列：输入框 =====
+        self.text_boxes["agent_count"].rect.x = input_x
+        self.text_boxes["agent_count"].rect.y = form_y + 30
+        self.text_boxes["agent_count"].draw(surface)
+
+        self.text_boxes["rounds"].rect.x = input_x
+        self.text_boxes["rounds"].rect.y = form_y + 80
+        self.text_boxes["rounds"].draw(surface)
+
+        self.text_boxes["locations"].rect.x = input_x
+        self.text_boxes["locations"].rect.y = form_y + 130
+        self.text_boxes["locations"].draw(surface)
+
+        # 预设主题输入框
+        self.text_boxes["theme"].rect.x = input_x
+        self.text_boxes["theme"].rect.y = form_y + 220
+        self.text_boxes["theme"].draw(surface)
 
         # 快速模式复选框
-        fast_label = self.font.render("快速模式 (不调用LLM):", True, self.text_color)
-        surface.blit(fast_label, (form_x + 30, y_offset + 200))
-
-        checkbox_rect = pygame.Rect(form_x + 250, y_offset + 200, 30, 30)
+        fast_y = form_y + 270
+        checkbox_rect = pygame.Rect(input_x, fast_y, 30, 30)
         pygame.draw.rect(surface, (60, 64, 72), checkbox_rect, border_radius=5)
         if self.simulation_settings["fast_mode"]:
             pygame.draw.rect(surface, self.accent_color, checkbox_rect, border_radius=5)
@@ -503,12 +538,24 @@ class AgentPanel:
 
         # 确定按钮
         confirm_btn = Button(
-            rect=pygame.Rect(form_x + 175, form_y + 280, 150, 45),
+            rect=pygame.Rect(form_x + 200, form_y + 320, 150, 45),
             text="确定",
             callback=self._apply_settings,
             color=(60, 140, 80)
         )
         confirm_btn.draw(surface)
+
+    def _draw_radio_button(self, surface, x: int, y: int, label: str, is_selected: bool):
+        """绘制单选按钮"""
+        # 圆圈
+        circle_rect = pygame.Rect(x, y, 18, 18)
+        pygame.draw.circle(surface, (80, 84, 92), (x + 9, y + 9), 9, 2)
+        if is_selected:
+            pygame.draw.circle(surface, self.accent_color, (x + 9, y + 9), 6)
+
+        # 标签文字
+        label_surf = self.font.render(label, True, self.text_color)
+        surface.blit(label_surf, (x + 25, y + 1))
 
     def _do_create_agent(self):
         """执行创建智能体"""
@@ -568,13 +615,12 @@ class AgentPanel:
         except:
             pass
 
-        # 场景
-        scenario_names = [name for name, _ in self.scenarios]
-        selected_name = self.dropdowns["scenario"].options[self.dropdowns["scenario"].selected_index]
-        for i, (_, display_name) in enumerate(self.scenarios):
-            if display_name == selected_name:
-                self.simulation_settings["scenario"] = scenario_names[i]
-                break
+        # 预设主题
+        theme = self.text_boxes["theme"].text.strip()
+        if theme:
+            self.simulation_settings["theme"] = theme
+
+        # 场景已经在simulation_settings中通过单选按钮设置好了
 
         self.current_view = "main"
 
@@ -664,15 +710,21 @@ class AgentPanel:
             elif self.current_view == "settings":
                 for tb in self.text_boxes.values():
                     tb.handle_event(event)
-                for dd in self.dropdowns.values():
-                    dd.handle_event(event)
 
                 # 快速模式复选框
                 form_x, form_y = 50, 160
-                y_offset = form_y + 30
-                checkbox_rect = pygame.Rect(form_x + 250, y_offset + 200, 30, 30)
+                fast_y = form_y + 270
+                checkbox_rect = pygame.Rect(form_x + 180, fast_y, 30, 30)
                 if checkbox_rect.collidepoint(event.pos):
                     self.simulation_settings["fast_mode"] = not self.simulation_settings["fast_mode"]
+
+                # 场景单选按钮
+                radio_spacing = 22
+                for i, (scenario_id, scenario_name) in enumerate(self.scenarios):
+                    radio_y = self.scenario_radio_y + 25 + i * radio_spacing
+                    radio_rect = pygame.Rect(self.scenario_radio_x, radio_y, 150, 18)
+                    if radio_rect.collidepoint(event.pos):
+                        self.simulation_settings["scenario"] = scenario_id
 
                 # 返回按钮
                 back_btn = Button(
@@ -685,7 +737,7 @@ class AgentPanel:
 
                 # 确定按钮
                 confirm_btn = Button(
-                    rect=pygame.Rect(300, 510, 150, 45),
+                    rect=pygame.Rect(form_x + 200, form_y + 320, 150, 45),
                     text="确定",
                     callback=self._apply_settings,
                     color=(60, 140, 80)

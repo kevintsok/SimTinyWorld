@@ -67,9 +67,28 @@ class AgentVisual:
     move_duration: float = 1.0
     color: Tuple[int, int, int] = (200, 200, 200)
     mood_value: float = 0.0
+    mood_desc: str = "平静"
+    status: str = "空闲"
     is_talking: bool = False
     current_dialog: str = ""
     dialog_end_time: float = 0
+    # 新增：更多属性
+    wealth: Dict[str, float] = None  # 时间、社交、健康、精神、金钱
+    recent_memories: List[str] = None  # 近期记忆
+    long_term_memory_count: int = 0
+    short_term_memory_count: int = 0
+    personality_traits: List[str] = None  # 性格特点
+    core_values: List[str] = None  # 核心价值观
+
+    def __post_init__(self):
+        if self.wealth is None:
+            self.wealth = {"time": 0, "social": 0, "health": 0.5, "mental": 0.5, "money": 0}
+        if self.recent_memories is None:
+            self.recent_memories = []
+        if self.personality_traits is None:
+            self.personality_traits = []
+        if self.core_values is None:
+            self.core_values = []
 
 
 @dataclass
@@ -183,7 +202,10 @@ class GameView:
         self.connections = connections
 
     def add_agent(self, agent_id: str, name: str, mbti: str, location: str,
-                  mood_value: float = 0.0):
+                  mood_value: float = 0.0, mood_desc: str = "平静", status: str = "空闲",
+                  wealth: Dict[str, float] = None, recent_memories: List[str] = None,
+                  personality_traits: List[str] = None, core_values: List[str] = None,
+                  long_term_memory_count: int = 0, short_term_memory_count: int = 0):
         """添加智能体
 
         Args:
@@ -192,6 +214,14 @@ class GameView:
             mbti: MBTI类型
             location: 当前位置
             mood_value: 心情值 (-1 到 1)
+            mood_desc: 心情描述
+            status: 当前状态
+            wealth: 财富字典
+            recent_memories: 近期记忆列表
+            personality_traits: 性格特点列表
+            core_values: 核心价值观列表
+            long_term_memory_count: 长期记忆数量
+            short_term_memory_count: 短期记忆数量
         """
         # 获取位置坐标
         loc = self.locations.get(location)
@@ -209,7 +239,15 @@ class GameView:
             mbti=mbti,
             position=pos,
             color=color,
-            mood_value=mood_value
+            mood_value=mood_value,
+            mood_desc=mood_desc,
+            status=status,
+            wealth=wealth or {"time": 0, "social": 0, "health": 0.5, "mental": 0.5, "money": 0},
+            recent_memories=recent_memories or [],
+            personality_traits=personality_traits or [],
+            core_values=core_values or [],
+            long_term_memory_count=long_term_memory_count,
+            short_term_memory_count=short_term_memory_count
         )
 
         # 更新位置中的智能体列表
@@ -244,10 +282,30 @@ class GameView:
         from_loc.agents.discard(agent_id)
         to_loc.agents.add(agent_id)
 
-    def update_agent_mood(self, agent_id: str, mood_value: float):
+    def update_agent_mood(self, agent_id: str, mood_value: float, mood_desc: str = None):
         """更新智能体心情"""
         if agent_id in self.agents:
             self.agents[agent_id].mood_value = mood_value
+            if mood_desc:
+                self.agents[agent_id].mood_desc = mood_desc
+
+    def update_agent_info(self, agent_id: str, status: str = None, wealth: Dict[str, float] = None,
+                         recent_memories: List[str] = None, long_term_memory_count: int = None,
+                         short_term_memory_count: int = None):
+        """更新智能体详细信息"""
+        if agent_id not in self.agents:
+            return
+        agent = self.agents[agent_id]
+        if status is not None:
+            agent.status = status
+        if wealth is not None:
+            agent.wealth = wealth
+        if recent_memories is not None:
+            agent.recent_memories = recent_memories
+        if long_term_memory_count is not None:
+            agent.long_term_memory_count = long_term_memory_count
+        if short_term_memory_count is not None:
+            agent.short_term_memory_count = short_term_memory_count
 
     def show_dialog(self, agent_id: str, text: str, duration: float = 3.0):
         """显示对话气泡
@@ -552,6 +610,7 @@ class GameView:
     def _draw_agent_detail(self, surface: pygame.Surface, agent: AgentVisual):
         """绘制智能体详情"""
         y_offset = 350
+        panel_width = self.panel_rect.width - 40
 
         # 分隔线
         pygame.draw.line(surface, (60, 64, 72),
@@ -564,52 +623,141 @@ class GameView:
         surface.blit(title, (self.panel_rect.x + 20, y_offset))
         y_offset += 35
 
-        # 基本信息
+        # ===== 基本信息 =====
         info_items = [
             ("MBTI", agent.mbti),
-            ("心情", f"{agent.mood_value:.2f}"),
-            ("E/I", "外向" if agent.mbti.startswith('E') else "内向"),
+            ("状态", agent.status),
+            ("心情", f"{agent.mood_desc} ({agent.mood_value:.2f})"),
         ]
 
         for label, value in info_items:
             label_text = self.font.render(f"{label}:", True, (150, 150, 150))
             value_text = self.font.render(str(value), True, (220, 220, 220))
             surface.blit(label_text, (self.panel_rect.x + 25, y_offset))
-            surface.blit(value_text, (self.panel_rect.x + 100, y_offset))
-            y_offset += 25
+            surface.blit(value_text, (self.panel_rect.x + 90, y_offset))
+            y_offset += 22
 
-        # 心情条
-        y_offset += 10
+        # ===== 性格特点 =====
+        if agent.personality_traits:
+            y_offset += 5
+            traits_label = self.font.render("性格:", True, (150, 150, 150))
+            surface.blit(traits_label, (self.panel_rect.x + 25, y_offset))
+            y_offset += 18
+            traits_text = ", ".join(agent.personality_traits[:4])
+            traits_surface = self.font.render(traits_text, True, (200, 200, 220))
+            surface.blit(traits_surface, (self.panel_rect.x + 25, y_offset))
+            y_offset += 20
+
+        # ===== 心情条 =====
+        y_offset += 5
         mood_label = self.font.render("心情:", True, (150, 150, 150))
         surface.blit(mood_label, (self.panel_rect.x + 25, y_offset))
-        y_offset += 20
+        y_offset += 18
 
-        # 心情进度条
-        bar_width = self.panel_rect.width - 50
-        bar_height = 15
+        bar_width = panel_width
+        bar_height = 12
         bar_x = self.panel_rect.x + 25
         bar_y = y_offset
 
-        # 背景
         pygame.draw.rect(surface, (60, 64, 72), (bar_x, bar_y, bar_width, bar_height), border_radius=3)
-
-        # 进度
         fill_width = int((agent.mood_value + 1) / 2 * bar_width)
         if agent.mood_value >= 0:
             pygame.draw.rect(surface, (100, 200, 100), (bar_x, bar_y, fill_width, bar_height), border_radius=3)
         else:
             pygame.draw.rect(surface, (200, 100, 100), (bar_x + bar_width - fill_width, bar_y, fill_width, bar_height), border_radius=3)
+        y_offset += 20
 
-        # 当前对话
-        if agent.current_dialog:
-            y_offset += 30
-            dialog_label = self.font.render("当前对话:", True, (150, 150, 150))
-            surface.blit(dialog_label, (self.panel_rect.x + 25, y_offset))
+        # ===== 财富状态 =====
+        y_offset += 8
+        wealth_label = self.font_large.render("财富状态", True, (200, 200, 200))
+        surface.blit(wealth_label, (self.panel_rect.x + 20, y_offset))
+        y_offset += 22
+
+        wealth_items = [
+            ("时间", agent.wealth.get("time", 0), (100, 180, 255)),
+            ("社交", agent.wealth.get("social", 0), (100, 200, 150)),
+            ("健康", agent.wealth.get("health", 0.5), (255, 150, 100)),
+            ("精神", agent.wealth.get("mental", 0.5), (180, 100, 255)),
+            ("金钱", agent.wealth.get("money", 0), (255, 215, 0)),
+        ]
+
+        for w_name, w_value, w_color in wealth_items:
+            # 标签
+            w_label = self.font.render(f"{w_name}:", True, (150, 150, 150))
+            surface.blit(w_label, (self.panel_rect.x + 25, y_offset))
+
+            # 进度条
+            bar_x = self.panel_rect.x + 80
+            bar_width = panel_width - 80
+            bar_height = 10
+
+            pygame.draw.rect(surface, (50, 54, 62), (bar_x, y_offset, bar_width, bar_height), border_radius=2)
+
+            if w_name == "金钱":
+                # 金钱特殊处理，显示具体数值
+                money_text = self.font.render(f"¥{int(w_value):,}", True, w_color)
+                surface.blit(money_text, (bar_x + bar_width + 5, y_offset - 2))
+            else:
+                # 进度
+                fill_width = int((w_value + 1) / 2 * (bar_width - 40))
+                if w_value >= 0:
+                    pygame.draw.rect(surface, w_color, (bar_x, y_offset, max(0, fill_width), bar_height), border_radius=2)
+                else:
+                    pygame.draw.rect(surface, (150, 80, 80), (bar_x + bar_width//2 - max(0, -fill_width), y_offset, max(0, -fill_width), bar_height), border_radius=2)
+
+                # 数值
+                value_text = self.font.render(f"{w_value:.2f}", True, (180, 180, 180))
+                surface.blit(value_text, (bar_x + bar_width - 35, y_offset))
+
             y_offset += 20
+
+        # ===== 记忆统计 =====
+        y_offset += 8
+        memory_label = self.font_large.render("记忆", True, (200, 200, 200))
+        surface.blit(memory_label, (self.panel_rect.x + 20, y_offset))
+        y_offset += 22
+
+        mem_items = [
+            ("短期记忆", agent.short_term_memory_count, (255, 180, 100)),
+            ("长期记忆", agent.long_term_memory_count, (100, 180, 255)),
+        ]
+        for m_name, m_count, m_color in mem_items:
+            m_label = self.font.render(f"{m_name}:", True, (150, 150, 150))
+            surface.blit(m_label, (self.panel_rect.x + 25, y_offset))
+            count_text = self.font.render(str(m_count), True, m_color)
+            surface.blit(count_text, (self.panel_rect.x + 110, y_offset))
+            y_offset += 20
+
+        # ===== 近期记忆预览 =====
+        if agent.recent_memories:
+            y_offset += 8
+            recent_label = self.font_large.render("近期记忆", True, (200, 200, 200))
+            surface.blit(recent_label, (self.panel_rect.x + 20, y_offset))
+            y_offset += 22
+
+            for i, memory in enumerate(agent.recent_memories[:3]):
+                # 记忆条目背景
+                mem_rect = pygame.Rect(self.panel_rect.x + 25, y_offset,
+                                      panel_width, 35)
+                pygame.draw.rect(surface, (50, 54, 62), mem_rect, border_radius=3)
+
+                # 记忆内容
+                if len(memory) > 35:
+                    memory = memory[:35] + "..."
+                mem_text = self.font.render(memory, True, (180, 180, 180))
+                surface.blit(mem_text, (mem_rect.x + 8, mem_rect.y + 8))
+                y_offset += 40
+
+        # ===== 当前对话 =====
+        if agent.current_dialog:
+            y_offset += 10
+            dialog_label = self.font_large.render("当前对话", True, (200, 200, 200))
+            surface.blit(dialog_label, (self.panel_rect.x + 20, y_offset))
+            y_offset += 22
 
             # 对话框
             dialog_rect = pygame.Rect(self.panel_rect.x + 25, y_offset,
-                                      self.panel_rect.width - 50, 50)
+                                      panel_width, 50)
             pygame.draw.rect(surface, (50, 54, 62), dialog_rect, border_radius=5)
             pygame.draw.rect(surface, agent.color, dialog_rect, 2, border_radius=5)
 
