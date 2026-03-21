@@ -149,11 +149,19 @@ def run_simulation(agents, args):
     # 创建场景
     scenario = get_scenario(args.scenario, scenario_config)
 
+    # 根据场景类型计算默认步数
+    if args.scenario == "debate":
+        # debate: 每个agent每轮发言一次，总步数 = agents * rounds
+        default_steps = args.agents * args.rounds
+    else:
+        # daily_life等: steps = rounds * days
+        default_steps = args.rounds * 3
+
     # 创建模拟引擎
     engine = SimulationEngine(
         scenario=scenario,
         environment=world,
-        config={"default_steps": args.rounds * 3}
+        config={"default_steps": default_steps}
     )
 
     # 添加智能体
