@@ -10,13 +10,15 @@ Scenarios - 场景模块
 
 from simulation.scenarios.base import BaseScenario
 from simulation.scenarios.daily_life import DailyLifeScenario
+from simulation.scenarios.emergency import EmergencyScenario
+from simulation.scenarios.debate import DebateScenario
 
 
 SCENARIOS = {
     "daily_life": DailyLifeScenario,
-    # "emergency": EmergencyScenario,
+    "emergency": EmergencyScenario,
     # "geopolitics": GeopoliticsScenario,
-    # "debate": DebateScenario,
+    "debate": DebateScenario,
 }
 
 
@@ -43,5 +45,7 @@ def get_scenario(scenario_type: str, config: dict = None):
 __all__ = [
     "BaseScenario",
     "DailyLifeScenario",
+    "EmergencyScenario",
+    "DebateScenario",
     "get_scenario",
 ]
