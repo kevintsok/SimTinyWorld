@@ -10,7 +10,7 @@ class QwenEngine(BaseLLMEngine):
     API文档: https://help.aliyun.com/zh/dashscope/developer-reference/api-details
     """
     
-    def __init__(self, model_name: str = "qwen-plus", **kwargs):
+    def __init__(self, model_name: str = "qwen3.5-flash", **kwargs):
         super().__init__(model_name, **kwargs)
         
         # 如果明确指定使用模拟模式，则不需要尝试初始化客户端

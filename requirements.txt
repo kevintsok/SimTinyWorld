@@ -6,4 +6,6 @@ python-dotenv>=1.0.0
 langchain>=0.1.0
 langchain-community>=0.0.10
 pydantic>=2.0.0
-faiss-cpu>=1.7.4 
+faiss-cpu>=1.7.4
+colorama>=0.4.6
+pygame>=2.6.0
