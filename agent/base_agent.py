@@ -10,6 +10,8 @@ from langchain.text_splitter import CharacterTextSplitter
 from langchain_core.embeddings import Embeddings
 from llm_engine.factory import LLMEngineFactory
 from llm_engine.engine_verifier import EngineVerifier
+from simulation.base import BaseAgent as SimBaseAgent
+from simulation.base import EntityState
 
 MAX_SHORT_TERM_MEM = 50  # 短期记忆条目上限
 MAX_LONG_TERM_MEM = 200   # 长期记忆条目上限
@@ -47,8 +49,8 @@ class LLMEngineEmbeddings(Embeddings):
             engine = LLMEngineFactory.create_engine(engine)
         return engine.get_embeddings(text)
 
-class BaseAgent:
-    def __init__(self, id=None, name=None, gender=None, age=None, mbti=None, 
+class BaseAgent(SimBaseAgent):
+    def __init__(self, id=None, name=None, gender=None, age=None, mbti=None,
                  background=None, appearance=None, vector_store_dir=None,
                  init_wealth=None, engine=None):
         """初始化智能体
@@ -65,9 +67,10 @@ class BaseAgent:
             init_wealth: 初始财富
             engine: LLM引擎
         """
+        # 调用父类初始化
+        super().__init__(id or str(uuid.uuid4()), name or "Unknown")
+
         # 设置智能体基本属性
-        self.id = id or str(uuid.uuid4())
-        self.name = name
         self.gender = gender
         self.age = age
         self.mbti = mbti
@@ -83,7 +86,14 @@ class BaseAgent:
         self.plan_index = 0  # 计划步骤索引
         
         # 初始化LLM引擎（需要在初始化财富之前）
-        self.llm_engine = engine or EngineVerifier().get_first_available_engine()
+        # 优先使用全局引擎
+        from llm_engine.factory import has_global_engine, get_global_engine
+        if engine:
+            self.llm_engine = engine
+        elif has_global_engine():
+            self.llm_engine = get_global_engine()
+        else:
+            self.llm_engine = EngineVerifier().get_first_available_engine()
         
         # 初始化财富
         if init_wealth:
@@ -723,6 +733,55 @@ class BaseAgent:
             agent.mood = agent._generate_initial_mood()
         
         return agent
+
+    # ===== 继承自 SimBaseAgent 的抽象方法实现 =====
+
+    def think(self, prompt: str) -> str:
+        """思考并生成回复
+
+        Args:
+            prompt: 输入提示词
+
+        Returns:
+            str: 生成的回复
+        """
+        return self.respone(prompt)
+
+    def perceive(self, event) -> None:
+        """感知事件
+
+        Args:
+            event: 事件对象
+        """
+        # 将事件转换为记忆
+        content = f"感知到事件: {event.event_type}"
+        if event.data:
+            content += f" - {json.dumps(event.data, ensure_ascii=False)}"
+        self.add_memory(content)
+
+    def act(self) -> Dict[str, Any]:
+        """采取行动
+
+        Returns:
+            Dict[str, Any]: 行动结果
+        """
+        # 默认行动是保持当前状态
+        return {
+            "type": "idle",
+            "status": self.status,
+            "location": self.position
+        }
+
+    def update(self, delta_time: float) -> None:
+        """更新实体状态
+
+        Args:
+            delta_time: 时间增量
+        """
+        # 简单的时间推进，更新位置等
+        pass
+
+    # ===== 原有方法 =====
 
     def add_memory(self, content: str, is_long_term: bool = False, importance: float = 0.5):
         """添加记忆

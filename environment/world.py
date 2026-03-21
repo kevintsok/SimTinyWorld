@@ -4,6 +4,7 @@ from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass
 import random
 from environment.layout import EnvironmentLayout, EnvironmentVisualizer
+from simulation.base import BaseEnvironment, BaseEntity
 
 @dataclass
 class Location:
@@ -21,28 +22,32 @@ class Location:
         self.connected_locations = connected_locations
         self.current_agents = set()
 
-class World:
+class World(BaseEnvironment):
     """表示智能体活动的世界"""
-    
+
     # 单例实例
     _instance = None
-    
+
     @classmethod
     def get_instance(cls):
         """获取World类的单例实例
-        
+
         Returns:
             Optional[World]: 当前World实例，如果未初始化则返回None
         """
         return cls._instance
-    
-    def __init__(self, visual_mode: bool = False, location_count: int = 5):
+
+    def __init__(self, visual_mode: bool = False, location_count: int = 5, config: dict = None):
         """初始化世界
-        
+
         Args:
             visual_mode: 是否启用可视化模式
             location_count: 要创建的位置数量
+            config: 配置字典
         """
+        # 调用父类初始化
+        super().__init__(config or {})
+
         # 设置单例实例
         World._instance = self
         
@@ -133,14 +138,18 @@ class World:
             
     def add_agent(self, agent_id: str, agent_obj, initial_location: str = None):
         """添加智能体到世界
-        
+
         Args:
             agent_id: 智能体ID
             agent_obj: 智能体对象
             initial_location: 初始位置名称，如果为None，则随机选择一个位置
         """
-        # 存储智能体对象
+        # 存储智能体对象（保持向后兼容）
         self.agents[agent_id] = agent_obj
+
+        # 也添加到 entities（用于 BaseEnvironment 接口）
+        if hasattr(agent_obj, 'id') and hasattr(agent_obj, 'name'):
+            self.entities[agent_id] = agent_obj
         
         # 如果未指定初始位置，随机选择一个
         if initial_location is None:
@@ -288,7 +297,96 @@ class World:
         """
         if self.visual_mode and self.visualizer:
             self.visualizer.add_dialog(agent_id, text)
-    
+
+    # ===== 继承自 BaseEnvironment 的抽象方法实现 =====
+
+    def add_entity(self, entity: BaseEntity, position: Optional[str] = None) -> bool:
+        """添加实体
+
+        Args:
+            entity: 实体对象
+            position: 位置（可选）
+
+        Returns:
+            bool: 是否添加成功
+        """
+        if isinstance(entity, BaseEntity):
+            self.entities[entity.id] = entity
+
+            # 如果未指定位置，随机选择
+            if position is None and self.locations:
+                position = random.choice(list(self.locations.keys()))
+
+            # 添加到位置
+            if position and position in self.locations:
+                self.locations[position].current_agents.add(entity.id)
+                entity.position = position
+
+            return True
+        return False
+
+    def remove_entity(self, entity_id: str) -> bool:
+        """移除实体
+
+        Args:
+            entity_id: 实体ID
+
+        Returns:
+            bool: 是否移除成功
+        """
+        if entity_id in self.entities:
+            # 从位置中移除
+            for loc in self.locations.values():
+                if entity_id in loc.current_agents:
+                    loc.current_agents.remove(entity_id)
+
+            del self.entities[entity_id]
+            return True
+        return False
+
+    def get_neighbors(self, entity_id: str, radius: float = 1.0) -> List[BaseEntity]:
+        """获取附近的实体
+
+        Args:
+            entity_id: 实体ID
+            radius: 搜索半径
+
+        Returns:
+            List[BaseEntity]: 附近实体列表
+        """
+        # 获取实体的位置
+        entity_position = None
+        for loc_name, loc in self.locations.items():
+            if entity_id in loc.current_agents:
+                entity_position = loc_name
+                break
+
+        if not entity_position:
+            return []
+
+        neighbors = []
+        current_loc = self.locations.get(entity_position)
+        if current_loc:
+            # 获取直接相连的位置
+            connected = current_loc.connected_locations
+            for loc_name in connected:
+                if loc_name in self.locations:
+                    for agent_id in self.locations[loc_name].current_agents:
+                        if agent_id != entity_id and agent_id in self.entities:
+                            neighbors.append(self.entities[agent_id])
+
+        return neighbors
+
+    def tick(self, delta_time: float = 1.0) -> None:
+        """时间推进
+
+        Args:
+            delta_time: 时间增量
+        """
+        self.time += delta_time * self.time_scale
+
+    # ===== 原有方法 =====
+
     def get_all_locations(self) -> List[str]:
         """获取所有位置名称
         

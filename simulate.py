@@ -388,159 +388,179 @@ def run_simulation(agents, rounds=10, visual_mode=False, max_conversation_partic
     # 创建日志记录器
     logger = SimulationLogger()
     
-    # 记录模拟参数
-    logger.log_simulation(f"模拟参数: 智能体数量={len(agents)}, 每天轮数={rounds}, 位置数量={location_count}")
-    
-    # 创建环境描述
-    descriptions = EnvironmentDescriptions()
-    descriptions.initialize_environment(force=environment_init)
-    
-    # 创建世界实例（如果不存在）
-    world = World.get_instance()
-    if world is None:
-        world = World(visual_mode=visual_mode, location_count=location_count)
-    
-    # 使用前location_count个默认位置进行初始化
-    world.init_locations(descriptions.default_locations[:location_count])
-    
-    # 为每个智能体分配初始位置
-    for agent in agents:
-        random_location = random.choice(list(world.locations.keys()))
-        world.add_agent_to_location(agent, random_location)
-        agent.add_memory(f"我现在在{random_location}。")
+    try:
+        # 记录模拟参数
+        logger.log_simulation(f"模拟参数: 智能体数量={len(agents)}, 每天轮数={rounds}, 位置数量={location_count}")
         
-        # 记录智能体初始位置
-        if logger:
-            logger.log_agent_action(agent, "被放置在", random_location)
-            logger.log_simulation(f"{agent.name}（{agent.mbti}，{agent.gender}）被放置在{random_location}")
-            logger.log_simulation(f"外貌: {agent.appearance}")
-            logger.log_simulation(f"财富状态: 时间:{agent.wealth['time']:.2f}, 社交:{agent.wealth['social']:.2f}, 健康:{agent.wealth['health']:.2f}, 精神:{agent.wealth['mental']:.2f}, 金钱:{agent.wealth['money']:.2f}元")
-    
-    # 开始模拟多天的活动
-    days = 3
-    for day in range(1, days + 1):
-        logger.log_simulation(f"=== 第{day}天开始 ===")
-        print(f"\n=== 第{day}天开始 ===")
+        # 创建环境描述
+        descriptions = EnvironmentDescriptions()
+        descriptions.initialize_environment(force=environment_init)
         
-        # 让所有智能体制定计划
-        print(f"\n=== 智能体制定计划 ===")
-        logger.log_simulation(f"=== 智能体制定计划 ===")
+        # 创建世界实例（如果不存在）
+        world = World.get_instance()
+        if world is None:
+            world = World(visual_mode=visual_mode, location_count=location_count)
         
-        available_locations = list(world.locations.keys())
-        location_descriptions = {loc: descriptions.get_location_desc(loc) for loc in available_locations}
+        # 使用前location_count个默认位置进行初始化
+        world.init_locations(descriptions.default_locations[:location_count])
         
+        # 为每个智能体分配初始位置
         for agent in agents:
-            try:
-                agent.plan(available_locations, location_descriptions, rounds)
-                
-                # 记录计划
-                plan_str = "\n".join([f"{i+1}. 在{item['location']}停留{item['duration']}轮，{item['activity']}" 
-                                    for i, item in enumerate(agent.daily_plan)])
-                logger.log_simulation(f"{agent.name}的计划:\n{plan_str}")
-            except Exception as e:
-                error_msg = f"{agent.name}制定计划时出错: {e}"
-                print(error_msg)
-                logger.log_error(error_msg, agent)
-        
-        # 模拟每天的多轮活动
-        for round_index in range(1, rounds + 1):
-            print(f"\n=== 第{day}天 第{round_index}轮活动开始（总第{round_index + (day-1)*rounds}轮）===")
-            logger.log_round(day, round_index, rounds)
+            random_location = random.choice(list(world.locations.keys()))
+            world.add_agent_to_location(agent, random_location)
+            agent.add_memory(f"我现在在{random_location}。")
             
-            # 根据计划移动智能体
+            # 记录智能体初始位置
+            if logger:
+                logger.log_agent_action(agent, "被放置在", random_location)
+                logger.log_simulation(f"{agent.name}（{agent.mbti}，{agent.gender}）被放置在{random_location}")
+                logger.log_simulation(f"外貌: {agent.appearance}")
+                logger.log_simulation(f"财富状态: 时间:{agent.wealth['time']:.2f}, 社交:{agent.wealth['social']:.2f}, 健康:{agent.wealth['health']:.2f}, 精神:{agent.wealth['mental']:.2f}, 金钱:{agent.wealth['money']:.2f}元")
+        
+        # 开始模拟多天的活动
+        days = 3
+        for day in range(1, days + 1):
+            logger.log_simulation(f"=== 第{day}天开始 ===")
+            print(f"\n=== 第{day}天开始 ===")
+            
+            # 让所有智能体制定计划
+            print(f"\n=== 智能体制定计划 ===")
+            logger.log_simulation(f"=== 智能体制定计划 ===")
+            
+            available_locations = list(world.locations.keys())
+            location_descriptions = {loc: descriptions.get_location_desc(loc) for loc in available_locations}
+            
             for agent in agents:
                 try:
-                    # 获取计划中的下一个位置
-                    next_location = agent.get_next_planned_location()
-                    if next_location:
-                        # 获取当前位置
-                        current_location = None
-                        for loc_name, loc in world.locations.items():
-                            if agent.id in loc.current_agents:
-                                current_location = loc_name
-                                break
-                        
-                        # 如果计划的下一个位置与当前位置不同，移动智能体
-                        if current_location and next_location != current_location:
-                            world.move_agent(agent, current_location, next_location)
-                            memory = f"我从{current_location}移动到了{next_location}。"
-                            agent.add_memory(memory)
-                            logger.log_agent_move(agent, current_location, next_location)
-                            logger.log_agent_memory(agent, memory)
-                            print(f"{agent.name} 从 {current_location} 移动到 {next_location}")
+                    agent.plan(available_locations, location_descriptions, rounds)
+                    
+                    # 记录计划
+                    plan_str = "\n".join([f"{i+1}. 在{item['location']}停留{item['duration']}轮，{item['activity']}" 
+                                        for i, item in enumerate(agent.daily_plan)])
+                    logger.log_simulation(f"{agent.name}的计划:\n{plan_str}")
                 except Exception as e:
-                    error_msg = f"{agent.name}移动时出错: {e}"
+                    error_msg = f"{agent.name}制定计划时出错: {e}"
                     print(error_msg)
                     logger.log_error(error_msg, agent)
+                    # 检查是否是LLM引擎错误
+                    if "余额不足" in str(e) or "API key" in str(e) or "quota" in str(e):
+                        raise Exception("LLM引擎错误：余额不足或API key无效，模拟暂停")
             
-            # 确认所有位置的智能体分布
-            location_agents = {}
-            for loc_name, loc in world.locations.items():
-                location_agents[loc_name] = []
-                for agent_id in loc.current_agents:
-                    for agent in agents:
-                        if agent.id == agent_id:
-                            location_agents[loc_name].append(agent)
-                            break
-            
-            # 在每个位置并行运行对话
-            dialogue_threads = []
-            for loc_name, loc_agents in location_agents.items():
-                # 为每个有智能体的位置创建一个线程
-                thread = threading.Thread(
-                    target=run_dialogue_thread,
-                    args=(loc_agents, loc_name, round_index, max_conversation_participants, logger)
-                )
-                dialogue_threads.append(thread)
-                thread.start()
-            
-            # 等待所有对话线程完成
-            for thread in dialogue_threads:
-                thread.join()
-            
-            print("\n所有地点的对话已完成")
-            logger.log_simulation("所有地点的对话已完成")
-            
-            # 更新智能体计划进度
-            for agent in agents:
-                agent.update_plan_progress()
-        
-        # 更新智能体财富值
-        update_agents_wealth(agents, world, logger)
-        
-        # 让智能体休息和反思
-        agents_day_summary = []
-        for agent in agents:
-            # 记录睡眠前状态
-            pre_sleep_status = f"{agent.name}: 心情={agent.mood['description']} ({agent.mood['value']:.2f}), 健康={agent.wealth['health']:.2f}, 精神={agent.wealth['mental']:.2f}"
-            logger.log_simulation(f"睡眠前: {pre_sleep_status}")
-            
-            # 睡眠恢复
-            try:
-                sleep_result = agent.sleep()
+            # 模拟每天的多轮活动
+            for round_index in range(1, rounds + 1):
+                print(f"\n=== 第{day}天 第{round_index}轮活动开始（总第{round_index + (day-1)*rounds}轮）===")
+                logger.log_round(day, round_index, rounds)
                 
-                # 如果返回的是带有睡眠质量的结果
-                if isinstance(sleep_result, dict) and 'score' in sleep_result:
-                    logger.log_sleep(agent, sleep_result)
-                else:
-                    print(f"{agent.name} 睡眠: {sleep_result}")
-                    logger.log_simulation(f"{agent.name} 睡眠: {sleep_result}")
-            except Exception as e:
-                error_msg = f"{agent.name}睡眠时出错: {e}"
-                print(error_msg)
-                logger.log_error(error_msg, agent)
+                # 根据计划移动智能体
+                for agent in agents:
+                    try:
+                        # 获取计划中的下一个位置
+                        next_location = agent.get_next_planned_location()
+                        if next_location:
+                            # 获取当前位置
+                            current_location = None
+                            for loc_name, loc in world.locations.items():
+                                if agent.id in loc.current_agents:
+                                    current_location = loc_name
+                                    break
+                            
+                            # 如果计划的下一个位置与当前位置不同，移动智能体
+                            if current_location and next_location != current_location:
+                                world.move_agent(agent, current_location, next_location)
+                                memory = f"我从{current_location}移动到了{next_location}。"
+                                agent.add_memory(memory)
+                                logger.log_agent_move(agent, current_location, next_location)
+                                logger.log_agent_memory(agent, memory)
+                                print(f"{agent.name} 从 {current_location} 移动到 {next_location}")
+                    except Exception as e:
+                        error_msg = f"{agent.name}移动时出错: {e}"
+                        print(error_msg)
+                        logger.log_error(error_msg, agent)
+                
+                # 确认所有位置的智能体分布
+                location_agents = {}
+                for loc_name, loc in world.locations.items():
+                    location_agents[loc_name] = []
+                    for agent_id in loc.current_agents:
+                        for agent in agents:
+                            if agent.id == agent_id:
+                                location_agents[loc_name].append(agent)
+                                break
+                
+                # 在每个位置并行运行对话
+                dialogue_threads = []
+                for loc_name, loc_agents in location_agents.items():
+                    # 为每个有智能体的位置创建一个线程
+                    thread = threading.Thread(
+                        target=run_dialogue_thread,
+                        args=(loc_agents, loc_name, round_index, max_conversation_participants, logger)
+                    )
+                    dialogue_threads.append(thread)
+                    thread.start()
+                
+                # 等待所有对话线程完成
+                for thread in dialogue_threads:
+                    thread.join()
+                
+                print("\n所有地点的对话已完成")
+                logger.log_simulation("所有地点的对话已完成")
+                
+                # 更新智能体计划进度
+                for agent in agents:
+                    agent.update_plan_progress()
             
-            # 记录睡眠后状态
-            post_sleep_status = f"{agent.name}: 心情={agent.mood['description']} ({agent.mood['value']:.2f}), 健康={agent.wealth['health']:.2f}, 精神={agent.wealth['mental']:.2f}"
-            agents_day_summary.append(post_sleep_status)
-            logger.log_simulation(f"睡眠后: {post_sleep_status}")
+            # 更新智能体财富值
+            update_agents_wealth(agents, world, logger)
+            
+            # 让智能体休息和反思
+            agents_day_summary = []
+            for agent in agents:
+                # 记录睡眠前状态
+                pre_sleep_status = f"{agent.name}: 心情={agent.mood['description']} ({agent.mood['value']:.2f}), 健康={agent.wealth['health']:.2f}, 精神={agent.wealth['mental']:.2f}"
+                logger.log_simulation(f"睡眠前: {pre_sleep_status}")
+                
+                # 睡眠恢复
+                try:
+                    sleep_result = agent.sleep()
+                    
+                    # 如果返回的是带有睡眠质量的结果
+                    if isinstance(sleep_result, dict) and 'score' in sleep_result:
+                        logger.log_sleep(agent, sleep_result)
+                    else:
+                        print(f"{agent.name} 睡眠: {sleep_result}")
+                        logger.log_simulation(f"{agent.name} 睡眠: {sleep_result}")
+                except Exception as e:
+                    error_msg = f"{agent.name}睡眠时出错: {e}"
+                    print(error_msg)
+                    logger.log_error(error_msg, agent)
+                    # 检查是否是LLM引擎错误
+                    if "余额不足" in str(e) or "API key" in str(e) or "quota" in str(e):
+                        raise Exception("LLM引擎错误：余额不足或API key无效，模拟暂停")
+                
+                # 记录睡眠后状态
+                post_sleep_status = f"{agent.name}: 心情={agent.mood['description']} ({agent.mood['value']:.2f}), 健康={agent.wealth['health']:.2f}, 精神={agent.wealth['mental']:.2f}"
+                agents_day_summary.append(post_sleep_status)
+                logger.log_simulation(f"睡眠后: {post_sleep_status}")
+            
+            # 记录每天总结
+            logger.log_day_summary(day, agents_day_summary)
         
-        # 记录每天总结
-        logger.log_day_summary(day, agents_day_summary)
-    
-    # 关闭日志记录器
-    logger.close()
-    
-    print("\n=== 模拟结束 ===")
-    print(f"日志已保存至: {logger.log_dir}")
-    return agents
+        # 关闭日志记录器
+        logger.close()
+        
+        print("\n=== 模拟结束 ===")
+        print(f"日志已保存至: {logger.log_dir}")
+        return agents
+        
+    except Exception as e:
+        # 记录错误并关闭日志
+        error_msg = f"模拟过程中出现错误: {str(e)}"
+        print(f"\n{error_msg}")
+        logger.log_error(error_msg)
+        logger.close()
+        
+        # 如果是LLM引擎错误，抛出特定异常
+        if "余额不足" in str(e) or "API key" in str(e) or "quota" in str(e):
+            raise Exception("LLM引擎错误：余额不足或API key无效，模拟暂停")
+        else:
+            raise e
