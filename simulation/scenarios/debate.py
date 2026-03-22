@@ -55,10 +55,6 @@ DEBATE_TOPICS = [
     },
 ]
 
-# 线程锁
-agent_locks = {}
-global_lock = threading.Lock()
-
 
 class DebateScenario(BaseScenario):
     """辩论场景
@@ -86,6 +82,10 @@ class DebateScenario(BaseScenario):
 
         # 辩论记录
         self.debate_record: List[Dict[str, Any]] = []
+
+        # 线程锁
+        self.agent_locks = {}
+        self.global_lock = threading.Lock()
 
         # 快速测试模式的预设回复
         self._mock_responses = [
@@ -125,9 +125,9 @@ class DebateScenario(BaseScenario):
         Args:
             agent: 智能体实例
         """
-        with global_lock:
-            if agent.id not in agent_locks:
-                agent_locks[agent.id] = threading.Lock()
+        with self.global_lock:
+            if agent.id not in self.agent_locks:
+                self.agent_locks[agent.id] = threading.Lock()
 
         # 确定辩论立场（根据config或随机分配）
         stance = self.config.get(f"stance_{agent.id}")
@@ -422,7 +422,7 @@ class DebateScenario(BaseScenario):
         if self.fast_mode:
             return random.choice(self._mock_responses)
 
-        with agent_locks.get(agent.id, global_lock):
+        with self.agent_locks.get(agent.id, self.global_lock):
             if hasattr(agent, "think"):
                 return agent.think(prompt)
             return random.choice(self._mock_responses)

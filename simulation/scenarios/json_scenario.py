@@ -118,6 +118,9 @@ class JSONScenario(BaseScenario):
         # 加载配置
         self.config_data = self.scenario_data.get("config", {})
 
+        # 加载结果配置
+        self.results_config = self.scenario_data.get("results", {})
+
     def get_era(self) -> str:
         """根据场景名称和描述判断时代主题"""
         name_lower = self.name.lower()
@@ -161,14 +164,6 @@ class JSONScenario(BaseScenario):
             "events": self.events,
             "agents": self.agent_configs
         }
-
-        # 加载结果配置
-        self.results_config = self.scenario_data.get("results", {})
-
-        print(f"加载场景: {self.name}")
-        print(f"描述: {self.description}")
-        print(f"智能体数: {len(self.agent_configs)}")
-        print(f"事件数: {len(self.events)}")
 
     def setup(self) -> None:
         """初始化场景"""
