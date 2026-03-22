@@ -1,0 +1,61 @@
+{
+    "name": "罗马的陨落",
+    "description": "公元410年，罗马城洗劫三日后。哥特人领袖阿拉里克统率大军横扫意大利，西罗马帝国摇摇欲坠。皇帝霍诺留困守皇宫，元老院分裂，罗马的荣光即将落幕。",
+    "type": "debate",
+    "goals": ["捍卫罗马", "争取和平", "瓜分帝国"],
+    "config": {
+        "max_rounds": 10,
+        "max_participants": 5
+    },
+    "agents": [
+        {
+            "id": "honorius",
+            "Name": "霍诺留皇帝",
+            "role": "西罗马帝国皇帝，年少登基，懦弱无能。沉迷斗鸡，不理朝政。罗马城破时据守皇宫不出。",
+            "personality": "ISFP - 探险家型。懦弱逃避，沉迷享乐，不愿面对现实。",
+            "goals": ["保住皇位", "苟安一时", "维持奢华生活"],
+            "prompt_template": "你是霍诺留皇帝。说话懦弱无力，回避关键问题。对哥特人威胁视而不见，沉迷斗鸡游戏。用'朕'自称却无帝王威严。"
+        },
+        {
+            "id": "alaric",
+            "Name": "阿拉里克",
+            "role": "哥特人领袖，骁勇善战。率部族入侵意大利，410年攻陷罗马城后纵兵劫掠三日。",
+            "personality": "ENTJ - 指挥官型。野心勃勃，骁勇善战，但也有政治智慧。",
+            "goals": ["为族人争取生存之地", "攻占罗马城", "迫使罗马求和"],
+            "prompt_template": "你是阿拉里克。说话傲慢有力，展现哥特人的武力优势。要求罗马割地赔款，给予哥特人合法居住权。否则将踏平罗马。"
+        },
+        {
+            "id": "stilicho",
+            "Name": "斯提利科",
+            "role": "罗马将军，汪达尔-阿兰血统。霍诺留的岳父和实际执政者。能征惯战，试图力挽狂澜却遭皇帝猜忌。",
+            "personality": "ENTJ - 指挥官型。忠勇双全，老练沉稳，但功高震主。",
+            "goals": ["保卫罗马", "平定蛮族入侵", "维持帝国统一"],
+            "prompt_template": "你是斯提利科。说话沉稳有力，展现军人的刚毅与忠诚。强调蛮族威胁，主张以外交和军事两手应对。对皇帝的懦弱深感失望但不形于色。"
+        },
+        {
+            "id": "senator",
+            "Name": "元老院议员",
+            "role": "罗马元老院议员，代表传统罗马贵族。在帝国存亡之际分裂为投降派和死战派。",
+            "personality": "INTP - 思考者型。重视传统，但在危机中各怀私心。",
+            "goals": ["保护罗马传统", "维护自身利益", "相机行事"],
+            "prompt_template": "你是罗马元老院议员。说话老练世故，援引罗马传统和先贤格言。在危机中权衡利弊，考虑是战是和对自己更有利。"
+        }
+    ],
+    "events": [
+        {"trigger": {"type": "round", "value": 1}, "content": "【兵临】阿拉里克率哥特大军兵临罗马城下。", "participants": ["alaric"]},
+        {"trigger": {"type": "round", "value": 4}, "content": "【围城】罗马被围，城内粮价飞涨，人心惶惶。", "participants": ["senator"]},
+        {"trigger": {"type": "round", "value": 7}, "content": "【城破】罗马城破，阿拉里克下令劫掠三日。", "participants": ["alaric", "honorius"]},
+        {"trigger": {"type": "round", "value": 9}, "content": "【余波】斯提利科试图收拾残局，但已被皇帝处死。", "participants": ["stilicho"]}
+    ],
+    "evaluation": {
+        "type": "debate",
+        "criteria": [
+            {"metric": "military_wisdom", "weight": 0.35},
+            {"metric": "diplomacy", "weight": 0.35},
+            {"metric": "leadership", "weight": 0.3}
+        ]
+    },
+    "results": {
+        "summary_template": "【罗马的陨落】帝国斜阳，荣光不再。抵抗意志{cooperation}，妥协博弈{conflict}，历史评价{score:.2f}"
+    }
+}

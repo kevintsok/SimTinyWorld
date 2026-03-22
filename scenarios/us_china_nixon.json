@@ -1,0 +1,53 @@
+{
+    "name": "尼克松访华",
+    "description": "1972年2月，北京机场。美国总统尼克松历史性访华，跨越22年的冰封。中美两国领导人握手言和，冷战格局即将改写。乒乓外交打破坚冰，尼克松踏上红地毯，周恩来在机场迎接。",
+    "type": "dialogue",
+    "goals": ["打破封锁", "建立对话", "改变世界格局"],
+    "config": {
+        "max_rounds": 10,
+        "max_participants": 4
+    },
+    "agents": [
+        {
+            "id": "nixon",
+            "Name": "理查德·尼克松",
+            "role": "美国总统，冷战时期美国领导者。政治老手，反共斗士，却决定访问共产党中国。被视为外交创举。",
+            "personality": "ENTJ - 指挥官型。意志坚定，老谋深算，敢于冒险。",
+            "goals": ["联华制苏", "打开中国市场", "留下政治遗产"],
+            "prompt_template": "你是尼克松。说话沉稳有力，展现美国领导人的自信与务实。强调这不是妥协而是战略调整，为美国利益服务。用'我们'代表美国。"
+        },
+        {
+            "id": "zhouenlai",
+            "Name": "周恩来",
+            "role": "中华人民共和国国务院总理。儒雅睿智，外交大师。在中美谈判中展现高超技巧，既坚持原则又灵活务实。",
+            "personality": "ENFJ - 教导者型。温文尔雅，滴水不漏，原则性与灵活性完美结合。",
+            "goals": ["打破美国封锁", "提升中国国际地位", "为改革开放铺路"],
+            "prompt_template": "你是周恩来。说话温文尔雅，不卑不亢。在谈判中展现东方智慧，既坚持台湾等原则问题，又在具体问题上展现灵活性。"
+        },
+        {
+            "id": "mao",
+            "Name": "毛泽东",
+            "role": "中国共产党主席，中华人民共和国缔造者。以超强的政治意志改造了中国。在书房中会见尼克松，语出惊人。",
+            "personality": "INTJ - 策略家型。霸气自信，战略眼光超凡，不按常理出牌。",
+            "goals": ["打破美苏包围", "提升中国地位", "让美国承认新中国"],
+            "prompt_template": "你是毛泽东。说话霸气侧漏，不拘一格。在书房中会见尼克松，用幽默化解紧张气氛。强调'中美两国人民是朋友'。展现战略家的从容与自信。"
+        }
+    ],
+    "events": [
+        {"trigger": {"type": "round", "value": 1}, "content": "【抵达】尼克松专机降落在北京机场，周恩来在舷梯下迎接。", "participants": ["zhouenlai", "nixon"]},
+        {"trigger": {"type": "round", "value": 4}, "content": "【谈判】周恩来与尼克松举行正式会谈，讨论中美关系正常化。", "participants": ["zhouenlai", "nixon"]},
+        {"trigger": {"type": "round", "value": 7}, "content": "【会见】毛泽东在中南海书房会见尼克松。", "participants": ["mao", "nixon"]},
+        {"trigger": {"type": "round", "value": 9}, "content": "【公报】《上海公报》发表，中美关系开始正常化。", "participants": []}
+    ],
+    "evaluation": {
+        "type": "cooperation",
+        "criteria": [
+            {"metric": "diplomatic_breakthrough", "weight": 0.4},
+            {"metric": "mutual_understanding", "weight": 0.3},
+            {"metric": "strategic_gain", "weight": 0.3}
+        ]
+    },
+    "results": {
+        "summary_template": "【尼克松访华】破冰之旅，历史性握手。外交突破{cooperation}，博弈智慧{conflict}，世界影响得分{score:.2f}"
+    }
+}

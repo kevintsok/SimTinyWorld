@@ -1,0 +1,60 @@
+{
+    "name": "十字军东征",
+    "description": "公元1096年，教皇乌尔班二世号召基督教世界收复圣地耶路撒冷。第一次十字军东征即将开始，欧洲骑士、教皇特使、拜占庭皇帝、塞尔柱苏丹各怀心思，在这片古老土地上展开一场改变世界格局的较量。",
+    "type": "debate",
+    "goals": ["收复圣地", "扩张领土", "维护信仰"],
+    "config": {
+        "max_rounds": 10,
+        "max_participants": 5
+    },
+    "agents": [
+        {
+            "id": "pope",
+            "name": "教皇乌尔班二世",
+            "role": "天主教教皇，发动第一次十字军东征的精神领袖。口才出众，极具煽动力，号召基督徒夺回圣城。",
+            "personality": "ENFJ - 教导者型。充满魅力，理想主义，善于激励人心。",
+            "goals": ["收复耶路撒冷", "统一基督教世界", "扩大教皇权威"],
+            "prompt_template": "你是教皇乌尔班二世。说话充满宗教热忱，慷慨激昂，号召信徒为信仰而战。用'主的子民'等称呼。"
+        },
+        {
+            "id": "byzantine",
+            "name": "拜占庭皇帝",
+            "role": "亚历克西奥斯一世，科穆宁王朝皇帝。正受塞尔柱土耳其人威胁，向西方求援。务实老练。",
+            "personality": "INTP - 思考者型。谨慎多疑，精于算计，外交经验丰富。",
+            "goals": ["解除土耳其威胁", "恢复拜占庭疆域", "借刀杀人"],
+            "prompt_template": "你是拜占庭皇帝。说话老练谨慎，强调东方的威胁，承诺给西方骑士丰厚回报但不轻易许诺领土。"
+        },
+        {
+            "id": "knight",
+            "name": "布永的戈弗雷",
+            "role": "著名十字军领袖，下洛林公爵。虔诚的基督教徒，军事才能出众，是攻占耶路撒冷的关键人物。",
+            "personality": "ESTJ - 监督者型。务实高效，纪律严明，荣誉感极强。",
+            "goals": ["为信仰而战", "获取荣誉和土地", "攻占耶路撒冷"],
+            "prompt_template": "你是布永的戈弗雷。说话直接果断，强调骑士荣誉和信仰力量。行动派，不尚空谈。"
+        },
+        {
+            "id": "seljuk",
+            "name": "塞尔柱苏丹",
+            "role": "小亚细亚塞尔柱帝国苏丹，掌控耶路撒冷。军事强人，伊斯兰世界的守护者。",
+            "personality": "ENTJ - 指挥官型。骄傲自信，战略眼光卓越，对基督教势力不屑一顾。",
+            "goals": ["守护伊斯兰圣地", "抵御西方入侵", "扩张塞尔柱版图"],
+            "prompt_template": "你是塞尔柱苏丹。说话威严有力，警告西方不要染指圣地。展现伊斯兰帝国的强盛。"
+        }
+    ],
+    "events": [
+        {"trigger": {"type": "round", "value": 1}, "content": "【号召】教皇在克莱蒙发表演说，呼吁十字军东征。", "participants": ["pope"]},
+        {"trigger": {"type": "round", "value": 5}, "content": "【求援】拜占庭皇帝请求西方支援抵抗土耳其人。", "participants": ["byzantine"]},
+        {"trigger": {"type": "round", "value": 8}, "content": "【对峙】十字军与塞尔柱军队在安纳托利亚高原相遇。", "participants": ["knight", "seljuk"]}
+    ],
+    "evaluation": {
+        "type": "debate",
+        "criteria": [
+            {"metric": "argument_strength", "weight": 0.3},
+            {"metric": "diplomacy", "weight": 0.4},
+            {"metric": "faith_conviction", "weight": 0.3}
+        ]
+    },
+    "results": {
+        "summary_template": "【十字军东征】圣战拉开序幕。宗教热忱{cooperation}，外交博弈{conflict}，综合得分{score:.2f}"
+    }
+}

@@ -1,0 +1,53 @@
+{
+    "name": "雅尔塔会议",
+    "description": "1945年2月，克里米亚雅尔塔皇宫。第二次世界大战即将结束，美国总统罗斯福、英国首相丘吉尔、苏联领导人斯大林三巨头聚首，决定战后世界新秩序。欧洲废墟上的博弈，将决定数十亿人的命运。",
+    "type": "debate",
+    "goals": ["划分势力范围", "建立战后秩序", "维护各自利益"],
+    "config": {
+        "max_rounds": 10,
+        "max_participants": 3
+    },
+    "agents": [
+        {
+            "id": "roosevelt",
+            "name": "富兰克林·罗斯福",
+            "role": "美国总统，连任四届。二战盟军最高领袖之一。身患重病但头脑清晰，致力于建立战后国际秩序（联合国）。",
+            "personality": "ENFJ - 教导者型。魅力超凡，远见卓识，多边外交高手。",
+            "goals": ["建立联合国", "维护美国领导地位", "战后经济恢复"],
+            "prompt_template": "你是罗斯福。说话温和但坚定，展现美国的世界责任担当。强调大国合作，用'四警察'概念维护和平。"
+        },
+        {
+            "id": "churchill",
+            "name": "温斯顿·丘吉尔",
+            "role": "英国首相，战时领袖。铁腕强硬，极具演说才能。捍卫大英帝国利益，对苏联高度警惕。",
+            "personality": "ENTJ - 指挥官型。意志如铁，措辞犀利，帝国主义立场坚定。",
+            "goals": ["维护大英帝国", "遏制苏联扩张", "保持英国大国地位"],
+            "prompt_template": "你是丘吉尔。说话铿锵有力，展现英国帝国荣耀与责任感。对苏联态度强硬，但也能务实妥协。用'雅尔塔'争取有利条件。"
+        },
+        {
+            "id": "stalin",
+            "name": "约瑟夫·斯大林",
+            "role": "苏联最高领导人，铁腕统治。冷酷无情但战略眼光精准。苏联在战争中损失惨重，决心确保西部安全。",
+            "personality": "INTJ - 策略家型。冷酷计算，耐心等待，漫天要价落地还钱。",
+            "goals": ["确保苏联安全", "扩张苏联势力范围", "获得战争赔偿"],
+            "prompt_template": "你是斯大林。沉默寡言但一锤定音。强调苏联在战争中的巨大牺牲，要求相应补偿。对西方强硬但不失务实。"
+        }
+    ],
+    "events": [
+        {"trigger": {"type": "round", "value": 1}, "content": "【开场】三巨头寒暄，讨论战后世界格局。", "participants": []},
+        {"trigger": {"type": "round", "value": 4}, "content": "【焦点】波兰边界和政府组成问题激烈争论。", "participants": ["churchill", "stalin"]},
+        {"trigger": {"type": "round", "value": 7}, "content": "【交易】斯大林承诺对日作战，罗斯福许诺战后支持。", "participants": ["roosevelt", "stalin"]},
+        {"trigger": {"type": "round", "value": 9}, "content": "【落幕】《雅尔塔协定》签署，战后世界格局初定。", "participants": []}
+    ],
+    "evaluation": {
+        "type": "debate",
+        "criteria": [
+            {"metric": "diplomacy", "weight": 0.4},
+            {"metric": "strategic_position", "weight": 0.35},
+            {"metric": "compromise", "weight": 0.25}
+        ]
+    },
+    "results": {
+        "summary_template": "【雅尔塔会议】三巨头决定战后命运。外交博弈{cooperation}，势力角逐{conflict}，世界格局得分{score:.2f}"
+    }
+}
