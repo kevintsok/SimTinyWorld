@@ -19,6 +19,7 @@ import time
 from typing import Dict, List, Optional, Tuple, Any, Set, Callable
 from dataclasses import dataclass
 from ui.fonts import get_font
+from ui.components import TextBox
 
 # 复用 game_view 中的常量
 from ui.game_view import (
@@ -118,14 +119,42 @@ class ScenarioView:
         self.scenario_type = "dialogue"
 
         # 时间线
+        self.current_day = 1
         self.current_round = 1
         self.max_rounds = 10
+        self.total_dialogue_count = 0  # 累计对话次数
         self.events: List[Dict[str, Any]] = []
         self.triggered_events: Set[int] = set()
         self.event_notifications: List[Dict[str, Any]] = []
 
         # 顶部信息栏高度
         self.header_height = 50
+
+        # ===== 每日交互轮数输入框 =====
+        self.interact_rounds: int = 5  # 默认每日5轮交互
+        interact_rounds_rect = pygame.Rect(
+            self.width - 380,  # x position (left of stats)
+            self.height - 45,  # y position in control bar
+            80, 30
+        )
+        self.interact_rounds_input = TextBox(interact_rounds_rect, "5", max_length=3)
+
+    def _on_end_today_clicked(self):
+        """结束今天按钮点击处理"""
+        if self.interface.on_simulation_control:
+            self.interface.on_simulation_control("end_day", None)
+
+    def get_interact_rounds(self) -> int:
+        """获取每日交互轮数"""
+        text = self.interact_rounds_input.text.strip()
+        if text.isdigit() and int(text) > 0:
+            return int(text)
+        return self.interact_rounds
+
+    def set_interact_rounds(self, rounds: int):
+        """设置每日交互轮数"""
+        self.interact_rounds = max(1, rounds)
+        self.interact_rounds_input.text = str(self.interact_rounds)
 
     def _apply_era_theme(self, era: str):
         """应用时代主题配色"""
@@ -161,6 +190,14 @@ class ScenarioView:
     def set_round(self, round_num: int):
         """设置当前轮数"""
         self.current_round = round_num
+
+    def set_day(self, day: int):
+        """设置当前天数"""
+        self.current_day = day
+
+    def set_total_dialogue_count(self, count: int):
+        """设置累计对话次数"""
+        self.total_dialogue_count = count
 
     def trigger_event(self, event_index: int) -> Optional[Dict[str, Any]]:
         """触发事件"""
@@ -204,6 +241,7 @@ class ScenarioView:
                   wealth: Dict[str, float] = None, recent_memories: List[str] = None,
                   personality_traits: List[str] = None, core_values: List[str] = None,
                   long_term_memory_count: int = 0, short_term_memory_count: int = 0,
+                  short_term_memories: List[str] = None, long_term_memories: List[str] = None,
                   role: str = "", era: str = "", goals: List[str] = None,
                   historical_name: str = ""):
         """添加智能体"""
@@ -226,6 +264,8 @@ class ScenarioView:
             core_values=core_values or [],
             long_term_memory_count=long_term_memory_count,
             short_term_memory_count=short_term_memory_count,
+            short_term_memories=short_term_memories or [],
+            long_term_memories=long_term_memories or [],
             role=role,
             era=era,
             goals=goals or [],
@@ -264,7 +304,8 @@ class ScenarioView:
 
     def update_agent_info(self, agent_id: str, status: str = None, wealth: Dict[str, float] = None,
                          recent_memories: List[str] = None, long_term_memory_count: int = None,
-                         short_term_memory_count: int = None):
+                         short_term_memory_count: int = None,
+                         short_term_memories: List[str] = None, long_term_memories: List[str] = None):
         """更新智能体详细信息"""
         if agent_id not in self.agents:
             return
@@ -279,6 +320,10 @@ class ScenarioView:
             agent.long_term_memory_count = long_term_memory_count
         if short_term_memory_count is not None:
             agent.short_term_memory_count = short_term_memory_count
+        if short_term_memories is not None:
+            agent.short_term_memories = short_term_memories
+        if long_term_memories is not None:
+            agent.long_term_memories = long_term_memories
 
     def show_dialog(self, agent_id: str, text: str, duration: float = 3.0):
         """显示对话气泡"""
@@ -988,21 +1033,37 @@ class ScenarioView:
 
         y_offset += 10
 
-        # ===== 记忆统计 =====
-        memory_label = self.font.render("记忆:", True, self.accent_color)
-        surface.blit(memory_label, (panel_x, y_offset))
-        y_offset += 20
+        # ===== 短期记忆 =====
+        if hasattr(agent, 'short_term_memories') and agent.short_term_memories:
+            short_label = self.font.render(f"短期记忆 ({len(agent.short_term_memories)}):", True, (255, 180, 100))
+            surface.blit(short_label, (panel_x, y_offset))
+            y_offset += 18
+            for mem in agent.short_term_memories[:5]:  # 最多显示5条
+                mem_text = mem[:40] + "..." if len(mem) > 40 else mem
+                mem_surface = self.font.render(f"  • {mem_text}", True, (200, 200, 200))
+                surface.blit(mem_surface, (panel_x, y_offset))
+                y_offset += 16
+        else:
+            short_label = self.font.render("短期记忆 (0):", True, (255, 180, 100))
+            surface.blit(short_label, (panel_x, y_offset))
+            y_offset += 18
 
-        mem_items = [
-            ("短期", agent.short_term_memory_count, (255, 180, 100)),
-            ("长期", agent.long_term_memory_count, (100, 180, 255)),
-        ]
-        for m_name, m_count, m_color in mem_items:
-            m_label = self.font.render(f"{m_name}:", True, (150, 150, 150))
-            surface.blit(m_label, (col1_x, y_offset))
-            count_text = self.font.render(str(m_count), True, m_color)
-            surface.blit(count_text, (col1_x + 40, y_offset))
-            y_offset += 20
+        y_offset += 5
+
+        # ===== 长期记忆 =====
+        if hasattr(agent, 'long_term_memories') and agent.long_term_memories:
+            long_label = self.font.render(f"长期记忆 ({len(agent.long_term_memories)}):", True, (100, 180, 255))
+            surface.blit(long_label, (panel_x, y_offset))
+            y_offset += 18
+            for mem in agent.long_term_memories[:5]:  # 最多显示5条
+                mem_text = mem[:40] + "..." if len(mem) > 40 else mem
+                mem_surface = self.font.render(f"  • {mem_text}", True, (200, 200, 200))
+                surface.blit(mem_surface, (panel_x, y_offset))
+                y_offset += 16
+        else:
+            long_label = self.font.render("长期记忆 (0):", True, (100, 180, 255))
+            surface.blit(long_label, (panel_x, y_offset))
+            y_offset += 18
 
         y_offset += 10
 
@@ -1137,12 +1198,30 @@ class ScenarioView:
         step_rect_center = step_text.get_rect(center=step_rect.center)
         surface.blit(step_text, step_rect_center)
 
-        # 统计信息
+        # 结束今天按钮
+        end_today_x = step_x + 90
+        end_today_rect = pygame.Rect(end_today_x, btn_y, 90, btn_height)
+        pygame.draw.rect(surface, (80, 100, 140), end_today_rect, border_radius=5)
+        end_today_text = self.font.render("结束今天", True, (255, 255, 255))
+        end_today_rect_center = end_today_text.get_rect(center=end_today_rect.center)
+        surface.blit(end_today_text, end_today_rect_center)
+
+        # 每日交互轮数标签和输入框
+        rounds_label = self.font.render("每日轮数:", True, (180, 180, 180))
+        surface.blit(rounds_label, (end_today_x + 100, btn_y + 8))
+
+        # 更新输入框位置（基于当前绘制位置）
+        input_x = end_today_x + 185
+        self.interact_rounds_input.rect.x = input_x
+        self.interact_rounds_input.rect.y = btn_y
+        self.interact_rounds_input.draw(surface)
+
+        # 统计信息（显示天数、轮数、对话次数、智能体数、位置数）
         stats_text = self.font.render(
-            f"智能体: {len(self.agents)} | 位置: {len(self.locations)}",
+            f"第{self.current_day}天 | 轮数:{self.current_round}/{self.interact_rounds} | 对话:{self.total_dialogue_count} | 智能体:{len(self.agents)}",
             True, (180, 180, 180)
         )
-        surface.blit(stats_text, (self.width - 250, bar_rect.y + 20))
+        surface.blit(stats_text, (self.width - 420, bar_rect.y + 20))
 
     def draw(self, selected_agent_id: Optional[str] = None,
              is_paused: bool = False, speed: float = 1.0):
@@ -1206,6 +1285,11 @@ class ScenarioView:
                     self.toggle_agent_details()
                     return "toggle_details"
 
+                # 检查每日交互轮数输入框
+                if self.interact_rounds_input.rect.collidepoint(mouse_pos):
+                    self.interact_rounds_input.handle_event(event)
+                    return None
+
                 # 检查控制栏按钮
                 bar_height = 60
                 bar_rect = pygame.Rect(0, self.height - bar_height, self.width, bar_height)
@@ -1234,6 +1318,11 @@ class ScenarioView:
             self.last_mouse_pos = event.pos
 
         elif event.type == pygame.KEYDOWN:
+            # 如果每日交互轮数输入框处于激活状态，传递按键事件
+            if self.interact_rounds_input.is_active:
+                if self.interact_rounds_input.handle_event(event):
+                    return None
+
             if event.key == pygame.K_SPACE:
                 return "toggle_pause"
             elif event.key == pygame.K_1:
@@ -1283,6 +1372,12 @@ class ScenarioView:
             if self.interface.on_simulation_control:
                 self.interface.on_simulation_control("step", None)
             return "step"
+
+        # 结束今天按钮
+        end_today_x = speed_x + 120  # step_x + 90 = (speed_x + 230) + 90
+        end_today_rect = pygame.Rect(end_today_x, btn_y, 90, 35)
+        if end_today_rect.collidepoint(pos):
+            return "end_day"
 
         return None
 

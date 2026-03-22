@@ -83,6 +83,12 @@ class SimulationController:
         self.last_step_time = 0
         self.step_interval = 2.0  # 秒
 
+        # 每日交互轮数状态
+        self.current_day = 1
+        self.interact_rounds_per_day = 5  # 默认每日5轮交互
+        self.current_interact_round = 0
+        self.total_dialogue_count = 0  # 累计对话次数（每个智能体参与一次对话计1）
+
     # ==================== 回调处理 ====================
 
     def _on_scenario_selected(self, scenario_id: str, config: dict):
@@ -181,6 +187,18 @@ class SimulationController:
 
         # 更新场景视图
         self._update_scenario_view()
+
+        # 设置每日交互轮数
+        self.interact_rounds_per_day = config.get("interact_rounds", 5)
+        self.scenario_view.set_interact_rounds(self.interact_rounds_per_day)
+
+        # 重置每日状态
+        self.current_day = 1
+        self.current_interact_round = 0
+        self.total_dialogue_count = 0
+        self.scenario_view.set_day(1)
+        self.scenario_view.set_round(1)
+        self.scenario_view.set_total_dialogue_count(0)
 
         # 开始模拟
         self.is_paused = False
@@ -284,12 +302,24 @@ class SimulationController:
         for agent_id, agent in self.agents.items():
             location = self.world.get_agent_location(agent_id) if self.world else None
             if location:
+                # 获取记忆数量和内容
+                long_term_memories = getattr(agent, 'long_term_memory', []) or []
+                short_term_memories = getattr(agent, 'short_term_memory', []) or []
+                long_term_count = len(long_term_memories)
+                short_term_count = len(short_term_memories)
+                recent_memories = short_term_memories[-3:] if short_term_memories else []
+
                 self.scenario_view.add_agent(
                     agent_id=agent_id,
                     name=agent.name,
                     mbti=agent.mbti,
                     location=location,
-                    mood_value=agent.mood.get("value", 0.0)
+                    mood_value=agent.mood.get("value", 0.0),
+                    long_term_memory_count=long_term_count,
+                    short_term_memory_count=short_term_count,
+                    short_term_memories=short_term_memories[-10:],  # 最近10条短期记忆
+                    long_term_memories=long_term_memories[-10:],    # 最近10条长期记忆
+                    recent_memories=recent_memories
                 )
 
     def _simulate_step(self):
@@ -309,6 +339,7 @@ class SimulationController:
                         self.scenario_view.move_agent(agent_id, current_loc, new_loc, duration=1.0)
 
         # 随机显示对话
+        dialogue_this_round = 0
         for agent_id, agent in list(self.agents.items()):
             if random.random() < 0.2:  # 20%概率说话
                 if self.fast_mode:
@@ -325,6 +356,63 @@ class SimulationController:
                     ]
                 text = random.choice(texts)
                 self.scenario_view.show_dialog(agent_id, text, duration=2.0)
+                # 添加到智能体短期记忆
+                agent.add_memory(f"在模拟中发言: {text}")
+                dialogue_this_round += 1
+
+        # 累计对话次数
+        self.total_dialogue_count += dialogue_this_round
+
+        # 更新记忆统计
+        self._sync_agent_memory_counts()
+
+        # 更新当前交互轮数
+        self.current_interact_round += 1
+        self.scenario_view.set_round(self.current_interact_round)
+        self.scenario_view.set_total_dialogue_count(self.total_dialogue_count)
+
+    def _sync_agent_memory_counts(self):
+        """同步智能体记忆数量到UI"""
+        for agent_id, agent in self.agents.items():
+            long_term_count = len(getattr(agent, 'long_term_memory', []) or [])
+            short_term_count = len(getattr(agent, 'short_term_memory', []) or [])
+            recent_memories = getattr(agent, 'short_term_memory', [])[-3:] if hasattr(agent, 'short_term_memory') else []
+            long_term_memories = getattr(agent, 'long_term_memory', []) or []
+            short_term_memories = getattr(agent, 'short_term_memory', []) or []
+
+            self.scenario_view.update_agent_info(
+                agent_id,
+                long_term_memory_count=long_term_count,
+                short_term_memory_count=short_term_count,
+                short_term_memories=short_term_memories[-10:],
+                long_term_memories=long_term_memories[-10:],
+                recent_memories=recent_memories
+            )
+
+    def _end_current_day(self):
+        """结束当前天，进入下一天"""
+        if not self.world or not self.agents:
+            return
+
+        print(f"结束第 {self.current_day} 天")
+
+        # 进入下一天
+        self.current_day += 1
+        self.current_interact_round = 0
+
+        # 从输入框获取最新的每日轮数设置
+        self.interact_rounds_per_day = self.scenario_view.get_interact_rounds()
+
+        # 显示提示
+        self.scenario_view.event_notifications.append({
+            "content": f"第 {self.current_day} 天开始",
+            "start_time": time.time(),
+            "duration": 3.0
+        })
+
+        # 重置轮数显示
+        self.scenario_view.set_round(1)
+        self.scenario_view.set_day(self.current_day)
 
     def _handle_action(self, action: Optional[str]):
         """处理动作"""
@@ -345,6 +433,9 @@ class SimulationController:
 
         elif action == "step":
             self._simulate_step()
+
+        elif action == "end_day":
+            self._end_current_day()
 
         elif action.startswith("select:"):
             agent_id = action.split(":")[1]

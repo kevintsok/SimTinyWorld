@@ -178,6 +178,8 @@ class AgentVisual:
     recent_memories: List[str] = None  # 近期记忆
     long_term_memory_count: int = 0
     short_term_memory_count: int = 0
+    short_term_memories: List[str] = None  # 短期记忆内容
+    long_term_memories: List[str] = None  # 长期记忆内容
     personality_traits: List[str] = None  # 性格特点
     core_values: List[str] = None  # 核心价值观
     # 历史场景扩展
@@ -197,16 +199,10 @@ class AgentVisual:
             self.core_values = []
         if self.goals is None:
             self.goals = []
-
-    def __post_init__(self):
-        if self.wealth is None:
-            self.wealth = {"time": 0, "social": 0, "health": 0.5, "mental": 0.5, "money": 0}
-        if self.recent_memories is None:
-            self.recent_memories = []
-        if self.personality_traits is None:
-            self.personality_traits = []
-        if self.core_values is None:
-            self.core_values = []
+        if self.short_term_memories is None:
+            self.short_term_memories = []
+        if self.long_term_memories is None:
+            self.long_term_memories = []
 
 
 @dataclass

@@ -84,13 +84,25 @@ def create_mock_agents(num_agents=20):
         gender = random.choice(["男", "女"])
         mbti = random.choice(mbti_types)
 
+        occupation = random.choice(['工程师', '教师', '医生', '销售', '设计师', '公务员', '企业家', '艺术家'])
+        education = random.choice(['高中', '大专', '本科', '硕士', '博士'])
+        hometown = random.choice(['北京', '上海', '广州', '深圳', '成都', '杭州', '武汉', '西安'])
+        age = random.randint(20, 50)
+
         agent = BaseAgent(
             id=f"agent_{i}",
             name=name,
             gender=gender,
-            age=random.randint(20, 50),
+            age=age,
             mbti=mbti,
-            background=f"职业: {random.choice(['工程师', '教师', '医生', '销售', '设计师'])}",
+            background={
+                "gender": gender,
+                "age": age,
+                "occupation": occupation,
+                "education": education,
+                "hometown": hometown,
+                "description": f"职业是{occupation}"
+            },
             appearance=f"外貌: 普通身高, {random.choice(['英俊', '清秀', '普通'])}",
             init_wealth={
                 "time": 0.0,
@@ -101,9 +113,9 @@ def create_mock_agents(num_agents=20):
             }
         )
 
-        # 添加一些初始记忆
+        # 添加一些初始短期记忆
         agent.add_memory("今天是我在这个世界的第一天。")
-        agent.add_memory(f"我叫{name}，今年{agent.age}岁。")
+        agent.add_memory(f"我叫{name}，今年{agent.age}岁，职业是{occupation}。")
 
         # 添加daily_plan属性（用于场景中的移动）
         agent.daily_plan = []

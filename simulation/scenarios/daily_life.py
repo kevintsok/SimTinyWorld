@@ -198,7 +198,8 @@ class DailyLifeScenario(BaseScenario):
                         {
                             "location": random.choice(self.available_locations),
                             "duration": 1,
-                            "activity": "随机活动"
+                            "activity": "随机活动",
+                            "status": "活动中"
                         }
                         for _ in range(self.rounds_per_day)
                     ]

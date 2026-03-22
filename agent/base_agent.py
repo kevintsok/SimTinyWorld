@@ -38,8 +38,13 @@ class LLMEngineEmbeddings(Embeddings):
         engine = self.llm_engine
         if isinstance(engine, str):
             engine = LLMEngineFactory.create_engine(engine)
+        if engine is None:
+            # 返回随机嵌入向量作为后备
+            import random
+            dim = 384  # 标准嵌入维度
+            return [[random.random() for _ in range(dim)] for _ in texts]
         return engine.get_embeddings(texts)
-    
+
     def embed_query(self, text: str) -> List[float]:
         """对单个查询文本进行嵌入"""
         # 确保llm_engine不是字符串
@@ -47,6 +52,11 @@ class LLMEngineEmbeddings(Embeddings):
         engine = self.llm_engine
         if isinstance(engine, str):
             engine = LLMEngineFactory.create_engine(engine)
+        if engine is None:
+            # 返回随机嵌入向量作为后备
+            import random
+            dim = 384  # 标准嵌入维度
+            return [random.random() for _ in range(dim)]
         return engine.get_embeddings(text)
 
 class BaseAgent(SimBaseAgent):
@@ -119,6 +129,15 @@ class BaseAgent(SimBaseAgent):
         
         # 初始化记忆存储
         self._init_memory_storage(vector_store_dir)
+
+        # 生成初始长期记忆（如果还没有长期记忆）
+        if not self.long_term_memory:
+            if self.llm_engine and hasattr(self.llm_engine, 'mock_mode') and not self.llm_engine.mock_mode:
+                # LLM可用，生成LLM驱动的记忆
+                self._generate_initial_long_term_memories()
+            else:
+                # LLM不可用（mock模式），生成基础记忆
+                self._generate_basic_memories()
 
     def _generate_initial_mood(self):
         """根据MBTI和背景生成初始心情"""
