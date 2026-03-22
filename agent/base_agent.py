@@ -1954,4 +1954,10 @@ class BaseAgent(SimBaseAgent):
     def _generate_with_llm(self, prompt):
         """使用LLM引擎生成文本"""
         llm_engine = self._get_llm_engine()
-        return llm_engine.generate(prompt)
+        if llm_engine is None:
+            return None
+        try:
+            return llm_engine.generate(prompt)
+        except Exception as e:
+            print(f"LLM生成失败: {e}")
+            return None
