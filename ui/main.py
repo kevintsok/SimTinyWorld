@@ -2,6 +2,7 @@
 UI Main Entry Point - UI主入口
 
 启动游戏风格可视化界面。
+使用新的模块化UI：MainView（主界面）和 ScenarioView（场景视图）。
 """
 
 import pygame
@@ -15,15 +16,19 @@ from typing import Dict, List, Optional, Any
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ui.agent_panel import AgentPanel
-from ui.game_view import GameView
+from ui.main_view import MainView, MainViewInterface
+from ui.scenario_view import ScenarioView, ScenarioViewInterface
 from environment.world import World
 from environment.layout import EnvironmentLayout
 from agent.base_agent import BaseAgent
 
 
-class SimulationUI:
-    """模拟UI主控制器"""
+class SimulationController:
+    """模拟UI主控制器
+
+    集成MainView（主界面）和ScenarioView（场景视图），
+    管理两者之间的切换和数据流动。
+    """
 
     def __init__(self, width: int = 1000, height: int = 700, fast_mode: bool = False):
         """初始化UI
@@ -38,12 +43,30 @@ class SimulationUI:
         self.height = height
         self.fast_mode = fast_mode
 
-        # 创建面板和游戏视图
-        self.agent_panel = AgentPanel(width, height)
-        self.game_view = GameView(width, height)
+        # 创建窗口（两个视图共享）
+        self.screen = pygame.display.set_mode((width, height))
+        pygame.display.set_caption("多智能体社会模拟")
+
+        # 创建主视图（带回调接口）
+        main_interface = MainViewInterface(
+            on_scenario_selected=self._on_scenario_selected,
+            on_agent_created=self._on_agent_created,
+            on_agent_imported=self._on_agent_imported,
+            on_quick_start=self._on_quick_start
+        )
+        self.main_view = MainView(self.screen, pygame.Rect(0, 0, width, height), main_interface)
+
+        # 创建场景视图（带回调接口，使用共享的screen）
+        scenario_interface = ScenarioViewInterface(
+            on_agent_selected=self._on_agent_selected,
+            on_agent_detail_toggle=self._on_agent_detail_toggle,
+            on_return_to_menu=self._on_return_to_menu,
+            on_simulation_control=self._on_simulation_control
+        )
+        self.scenario_view = ScenarioView(width, height, scenario_interface, self.screen)
 
         # 状态
-        self.current_view = "panel"  # panel, game
+        self.current_view = "main"  # main, scenario
         self.is_paused = True
         self.speed = 1.0
         self.selected_agent_id: Optional[str] = None
@@ -51,11 +74,7 @@ class SimulationUI:
         # 模拟数据
         self.agents: Dict[str, BaseAgent] = {}
         self.world: Optional[World] = None
-
-        # 设置回调
-        self.agent_panel.on_start_simulation = self._on_start_simulation
-        self.agent_panel.on_create_agent = self._on_create_agent
-        self.agent_panel.on_import_agent = self._on_import_agent
+        self.custom_agents: List[Dict] = []  # 用户创建的智能体
 
         # 时钟
         self.clock = pygame.time.Clock()
@@ -64,30 +83,55 @@ class SimulationUI:
         self.last_step_time = 0
         self.step_interval = 2.0  # 秒
 
-    def _on_start_simulation(self, settings: Dict[str, Any]):
+    # ==================== 回调处理 ====================
+
+    def _on_scenario_selected(self, scenario_id: str, config: dict):
+        """场景被选中"""
+        print(f"场景选中: {scenario_id}, 配置: {config}")
+
+    def _on_agent_created(self, agent_data: dict):
+        """创建智能体"""
+        self.custom_agents.append(agent_data)
+        print(f"智能体创建: {agent_data.get('name')}")
+
+    def _on_agent_imported(self, agent_data: dict):
+        """导入智能体"""
+        print(f"智能体导入: {agent_data}")
+
+    def _on_quick_start(self, config: dict):
+        """快速开始"""
+        self._start_simulation(config)
+
+    def _on_agent_selected(self, agent_id: str):
+        """智能体被选中"""
+        self.selected_agent_id = agent_id
+        print(f"智能体选中: {agent_id}")
+
+    def _on_agent_detail_toggle(self, visible: bool):
+        """详情显示状态变化"""
+        print(f"详情显示: {visible}")
+
+    def _on_return_to_menu(self):
+        """返回主菜单"""
+        self.current_view = "main"
+        pygame.display.set_caption("多智能体社会模拟")
+        print("返回主菜单")
+
+    def _on_simulation_control(self, control_type: str, value: Any):
+        """模拟控制"""
+        if control_type == "toggle_pause":
+            self.is_paused = not self.is_paused
+        elif control_type == "speed":
+            self.speed = value
+        elif control_type == "step":
+            self._simulate_step()
+
+    def _start_simulation(self, config: dict):
         """开始模拟"""
-        self.current_view = "game"
+        self.current_view = "scenario"
 
         # 初始化世界
-        self._init_world(settings)
-
-        # 生成随机智能体
-        agent_count = settings.get("agents", 3)
-        for i in range(agent_count):
-            self._create_random_agent(f"agent_{i+1}")
-
-        # 更新游戏视图
-        self._update_game_view()
-
-        # 开始模拟
-        self.is_paused = False
-
-        # 切换显示模式
-        pygame.display.set_caption("智能体模拟世界 - 仿真视图")
-
-    def _init_world(self, settings: Dict[str, Any]):
-        """初始化世界"""
-        location_count = settings.get("locations", 5)
+        location_count = config.get("locations", 5)
         self.world = World(visual_mode=False, location_count=location_count)
 
         # 获取位置数据
@@ -108,7 +152,40 @@ class SimulationUI:
                 for conn in loc.connected_locations
             ]
 
-        self.game_view.set_locations(locations, connections)
+        self.scenario_view.set_locations(locations, connections)
+
+        # 设置场景信息
+        scenario_type = config.get("scenario_type", "daily_life")
+        scenario_name_map = {
+            "daily_life": "日常生活",
+            "emergency": "突发事件",
+            "debate": "观点辩论"
+        }
+        self.scenario_view.set_scenario_info(
+            name=scenario_name_map.get(scenario_type, "智能体模拟"),
+            scenario_type=scenario_type
+        )
+
+        # 生成智能体
+        agent_count = config.get("num_agents", 5)
+        custom_agents = config.get("custom_agents", [])
+
+        # 如果有自定义智能体，先添加它们
+        for agent_data in custom_agents:
+            self._create_agent_from_data(agent_data)
+
+        # 如果智能体数量不足，随机生成
+        existing_count = len(self.agents)
+        for i in range(agent_count - existing_count):
+            self._create_random_agent(f"agent_{i+1}")
+
+        # 更新场景视图
+        self._update_scenario_view()
+
+        # 开始模拟
+        self.is_paused = False
+
+        pygame.display.set_caption(f"多智能体社会模拟 - {scenario_name_map.get(scenario_type, '智能体模拟')}")
 
     def _create_random_agent(self, agent_id: str):
         """创建随机智能体"""
@@ -153,12 +230,16 @@ class SimulationUI:
         )
 
         # 添加到世界
-        location = self.world.add_agent(agent_id, agent)
+        if self.world:
+            location = self.world.add_agent(agent_id, agent)
+        else:
+            location = None
 
         self.agents[agent_id] = agent
+        return agent, location
 
-    def _on_create_agent(self, agent_data: Dict[str, Any]):
-        """创建指定智能体"""
+    def _create_agent_from_data(self, agent_data: dict):
+        """从数据创建智能体"""
         import uuid
 
         agent_id = str(uuid.uuid4())[:8]
@@ -173,9 +254,9 @@ class SimulationUI:
         agent = BaseAgent(
             id=agent_id,
             name=agent_data["name"],
-            mbti=agent_data["mbti"],
+            mbti=agent_data.get("mbti", "ENFP"),
             gender=agent_data.get("gender", "男"),
-            age=agent_data.get("age", 25),
+            age=int(agent_data.get("age", 25)),
             background={
                 "occupation": agent_data.get("occupation", "未知"),
                 "education": "本科",
@@ -188,46 +269,22 @@ class SimulationUI:
         # 添加到世界
         if self.world:
             location = self.world.add_agent(agent_id, agent)
-            self.agents[agent_id] = agent
+        else:
+            location = None
 
-            # 更新视图
-            self.game_view.add_agent(
-                agent_id=agent_id,
-                name=agent.name,
-                mbti=agent.mbti,
-                location=location,
-                mood_value=agent.mood.get("value", 0.0)
-            )
+        self.agents[agent_id] = agent
+        return agent, location
 
-    def _on_import_agent(self, agent_data: Dict[str, Any]):
-        """导入智能体"""
-        try:
-            agent = BaseAgent.load_from_id(agent_data["id"])
-
-            if self.world:
-                location = self.world.add_agent(agent.id, agent)
-                self.agents[agent.id] = agent
-
-                self.game_view.add_agent(
-                    agent_id=agent.id,
-                    name=agent.name,
-                    mbti=agent.mbti,
-                    location=location,
-                    mood_value=agent.mood.get("value", 0.0)
-                )
-        except Exception as e:
-            print(f"导入智能体失败: {e}")
-
-    def _update_game_view(self):
-        """更新游戏视图"""
+    def _update_scenario_view(self):
+        """更新场景视图"""
         if not self.world:
             return
 
         # 添加智能体到视图
         for agent_id, agent in self.agents.items():
-            location = self.world.get_agent_location(agent_id)
+            location = self.world.get_agent_location(agent_id) if self.world else None
             if location:
-                self.game_view.add_agent(
+                self.scenario_view.add_agent(
                     agent_id=agent_id,
                     name=agent.name,
                     mbti=agent.mbti,
@@ -249,7 +306,7 @@ class SimulationUI:
                     if connected:
                         new_loc = random.choice(connected)
                         self.world.move_agent(agent, current_loc, new_loc)
-                        self.game_view.move_agent(agent_id, current_loc, new_loc, duration=1.0)
+                        self.scenario_view.move_agent(agent_id, current_loc, new_loc, duration=1.0)
 
         # 随机显示对话
         for agent_id, agent in list(self.agents.items()):
@@ -267,7 +324,7 @@ class SimulationUI:
                         agent.mood.get("description", "平静")
                     ]
                 text = random.choice(texts)
-                self.game_view.show_dialog(agent_id, text, duration=2.0)
+                self.scenario_view.show_dialog(agent_id, text, duration=2.0)
 
     def _handle_action(self, action: Optional[str]):
         """处理动作"""
@@ -275,8 +332,8 @@ class SimulationUI:
             return
 
         if action == "return_to_menu":
-            self.current_view = "panel"
-            pygame.display.set_caption("智能体模拟世界 - 启动界面")
+            self.current_view = "main"
+            pygame.display.set_caption("多智能体社会模拟")
             return
 
         if action == "toggle_pause":
@@ -298,26 +355,33 @@ class SimulationUI:
         running = True
 
         while running:
-            if self.current_view == "panel":
-                # 面板视图循环
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        running = False
-                    else:
-                        if self.agent_panel.handle_event(event):
-                            running = False
-
-                self.agent_panel.draw()
-
-            elif self.current_view == "game":
-                # 游戏视图循环
+            if self.current_view == "main":
+                # 主视图循环
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
                         running = False
                     elif event.type == pygame.KEYDOWN:
                         if event.key == pygame.K_ESCAPE:
-                            self.current_view = "panel"
-                            pygame.display.set_caption("智能体模拟世界 - 启动界面")
+                            running = False
+                        # 传递键盘事件给主视图（用于TextBox输入）
+                        self.main_view.handle_event(event)
+                    else:
+                        self.main_view.handle_event(event)
+
+                # 绘制主视图
+                self.screen.fill((30, 33, 40))  # 背景色
+                self.main_view.draw(self.screen)
+                pygame.display.flip()
+
+            elif self.current_view == "scenario":
+                # 场景视图循环
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        running = False
+                    elif event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_ESCAPE:
+                            self.current_view = "main"
+                            pygame.display.set_caption("多智能体社会模拟")
                         elif event.key == pygame.K_SPACE:
                             self.is_paused = not self.is_paused
                         elif event.key == pygame.K_1:
@@ -329,7 +393,7 @@ class SimulationUI:
                         elif event.key == pygame.K_s:
                             self._simulate_step()
                     else:
-                        action = self.game_view.handle_event(event)
+                        action = self.scenario_view.handle_event(event)
                         self._handle_action(action)
 
                 # 自动步进
@@ -341,8 +405,8 @@ class SimulationUI:
                         self.last_step_time = current_time
 
                 # 更新和绘制
-                self.game_view.update()
-                self.game_view.draw(
+                self.scenario_view.update()
+                self.scenario_view.draw(
                     selected_agent_id=self.selected_agent_id,
                     is_paused=self.is_paused,
                     speed=self.speed
@@ -355,15 +419,15 @@ class SimulationUI:
 
 def main():
     """主函数"""
-    parser = argparse.ArgumentParser(description="智能体模拟世界 - UI")
-    parser.add_argument("--width", type=int, default=1000, help="窗口宽度")
-    parser.add_argument("--height", type=int, default=700, help="窗口高度")
+    parser = argparse.ArgumentParser(description="多智能体社会模拟 - UI")
+    parser.add_argument("--width", type=int, default=1280, help="窗口宽度")
+    parser.add_argument("--height", type=int, default=800, help="窗口高度")
     parser.add_argument("--fast", action="store_true", help="快速模式（不调用LLM）")
 
     args = parser.parse_args()
 
     # 创建并运行UI
-    ui = SimulationUI(
+    ui = SimulationController(
         width=args.width,
         height=args.height,
         fast_mode=args.fast

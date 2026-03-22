@@ -121,8 +121,12 @@ class TextBox:
         """处理事件"""
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
-                self.is_active = self.rect.collidepoint(event.pos)
-                return True
+                if self.rect.collidepoint(event.pos):
+                    self.is_active = True
+                    return True
+                else:
+                    self.is_active = False
+                    return False  # 点击不在 rect 内，不处理
         elif event.type == pygame.KEYDOWN and self.is_active:
             if event.key == pygame.K_BACKSPACE:
                 self.text = self.text[:-1]
