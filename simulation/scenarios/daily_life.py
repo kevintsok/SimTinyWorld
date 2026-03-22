@@ -323,11 +323,9 @@ class DailyLifeScenario(BaseScenario):
         if len(participating_agents) > self.max_participants:
             participating_agents = random.sample(participating_agents, self.max_participants)
 
-        # 确保有锁
+        # 确保有锁（使用setdefault原子操作）
         for agent in participating_agents:
-            with self.global_lock:
-                if agent.id not in self.agent_locks:
-                    self.agent_locks[agent.id] = threading.Lock()
+            self.agent_locks.setdefault(agent.id, threading.Lock())
 
         # 只有一个智能体，记录独处
         if len(participating_agents) < 2:

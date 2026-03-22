@@ -421,19 +421,8 @@ class BaseAgent(SimBaseAgent):
                 style_prompt += "\n- 你喜欢计划和确定性，回复可能会包含决定和结论。"
             else:
                 style_prompt += "\n- 你喜欢保持灵活性和选择开放，回复可能会保留多种可能性。"
-        
+
         return style_prompt
-
-    def _should_conversation_end(self, conversation_history: List[Dict]) -> bool:
-        """判断对话是否应该结束（供外部调用）
-
-        Args:
-            conversation_history: 对话历史列表
-
-        Returns:
-            bool: 对话是否应该结束
-        """
-        return self.should_conversation_end(conversation_history)
 
     def should_conversation_end(self, conversation_history: List[Dict]) -> bool:
         """判断对话是否应该结束
