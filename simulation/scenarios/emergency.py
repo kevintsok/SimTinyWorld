@@ -13,17 +13,15 @@ from typing import Dict, List, Optional, Any
 from simulation.scenarios.base import BaseScenario
 
 
-# 突发事件类型
 EMERGENCY_TYPES = ["earthquake", "economic_crisis", "pandemic", "flood"]
 
-# 预设的协作/自私行为关键词
 COOPERATIVE_KEYWORDS = [
     "帮助", "救援", "捐", "支援", "合作", "分享", "团结", "互助",
     "救治", "疏散", "安置", "捐赠", "志愿者", "奉献", "牺牲", "协助"
 ]
 SELFISH_KEYWORDS = [
     "逃跑", "囤积", "抢购", "独自", "自私", "不管", "不救", "离开",
-    "抛弃", "只顾", "占有", "藏起来", "躲避", "逃跑", "趁火打劫"
+    "抛弃", "只顾", "占有", "藏起来", "躲避", "趁火打劫"
 ]
 
 
@@ -38,31 +36,26 @@ class EmergencyScenario(BaseScenario):
     def __init__(self, config: Dict[str, Any] = None):
         super().__init__(config)
 
-        # 配置参数
         self.max_rounds = self.config.get("rounds", 10)
         self.fast_mode = self.config.get("fast_mode", False)
         self.initial_population = self.config.get("agents", 10)
 
-        # 事件状态
         self.emergency_type = None
-        self.severity = 0.0  # 0.0 - 1.0, 越高越严重
-        self.duration = 0  # 持续时间（轮数）
-        self.remaining_duration = 0  # 剩余持续时间
-        self.impact_range = 1.0  # 影响范围 0.0 - 1.0
+        self.severity = 0.0
+        self.duration = 0
+        self.remaining_duration = 0
+        self.impact_range = 1.0
 
-        # 影响指标
-        self.initial_health = 1.0  # 初始平均健康值
-        self.initial_wealth = 1.0  # 初始平均财富值
+        self.initial_health = 1.0
+        self.initial_wealth = 1.0
         self.current_health = 1.0
         self.current_wealth = 1.0
 
-        # 累计统计
         self.total_deaths = 0
-        self.economic_losses = 0.0  # 经济损失百分比
-        self.deaths_prevented = 0  # 协作挽救的生命数
-        self.economic_loss_reduced = 0.0  # 协作减少的经济损失百分比
+        self.economic_losses = 0.0
+        self.deaths_prevented = 0
+        self.economic_loss_reduced = 0.0
 
-        # Agent行为追踪
         self.agent_actions: Dict[str, List[Dict]] = {}
         self.cooperation_score = 0.0
         self.selfish_score = 0.0
@@ -183,8 +176,6 @@ class EmergencyScenario(BaseScenario):
             self.agent_actions[agent.id] = []
 
         # 分析行为倾向
-        content_lower = content.lower()
-
         # 检查协作关键词
         cooperation_count = sum(1 for kw in COOPERATIVE_KEYWORDS if kw in content)
         # 检查自私关键词
