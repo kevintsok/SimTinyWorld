@@ -93,7 +93,6 @@ class BaseAgent(SimBaseAgent):
         # 状态和位置相关
         self.status = "空闲"  # 默认状态为空闲
         self.current_plan = None  # 当前行动计划
-        self.plan_index = 0  # 计划步骤索引
         self.daily_plan = []  # 每日计划列表
         self.current_plan_index = 0  # 当前计划索引
         
@@ -620,29 +619,16 @@ class BaseAgent(SimBaseAgent):
                 return self._get_default_sleep_quality()
                 
             # 尝试从响应中提取JSON部分
-            response = response.strip()
-            try:
-                # 寻找JSON的开始和结束位置
-                start_idx = response.find('{')
-                end_idx = response.rfind('}') + 1
-                
-                if start_idx >= 0 and end_idx > start_idx:
-                    json_str = response[start_idx:end_idx]
-                    sleep_quality = json.loads(json_str)
-                    
-                    # 验证数据格式
-                    if all(key in sleep_quality for key in ["score", "description", "reason"]):
-                        # 确保分数在1-5范围内
-                        score = max(min(int(sleep_quality["score"]), 5), 1)
-                        
-                        return {
-                            "score": score,
-                            "description": sleep_quality["description"],
-                            "reason": sleep_quality["reason"]
-                        }
-            except:
-                pass
-                
+            sleep_quality = self._extract_json_from_response(response)
+            if sleep_quality and all(key in sleep_quality for key in ["score", "description", "reason"]):
+                # 确保分数在1-5范围内
+                score = max(min(int(sleep_quality["score"]), 5), 1)
+                return {
+                    "score": score,
+                    "description": sleep_quality["description"],
+                    "reason": sleep_quality["reason"]
+                }
+
             # 如果解析失败，使用默认值
             return self._get_default_sleep_quality()
                 
@@ -770,7 +756,6 @@ class BaseAgent(SimBaseAgent):
             "appearance": self.appearance,
             "status": self.status,
             "current_plan": self.current_plan,
-            "plan_index": self.plan_index,
             "wealth": self.wealth,
             "mood": self.mood,
             "vector_store_dir": self.vector_store_dir,
@@ -824,7 +809,6 @@ class BaseAgent(SimBaseAgent):
 
         agent.status = data.get("status", "空闲")
         agent.current_plan = data.get("current_plan")
-        agent.plan_index = data.get("plan_index", 0)
 
         # 恢复心情，如果字典中没有心情数据，则生成一个新的
         if "mood" in data:
@@ -1182,45 +1166,28 @@ class BaseAgent(SimBaseAgent):
                 return self._generate_default_wealth()
                 
             # 尝试从响应中提取JSON部分
-            response = response.strip()
-            try:
-                # 寻找JSON的开始和结束位置
-                start_idx = response.find('{')
-                end_idx = response.rfind('}') + 1
-                
-                if start_idx >= 0 and end_idx > start_idx:
-                    json_str = response[start_idx:end_idx]
-                    wealth = json.loads(json_str)
-                else:
-                    print(f"为{self.name}生成财富时无法找到有效的JSON")
-                    return self._generate_default_wealth()
-                    
-                # 验证数据格式
-                if all(key in wealth for key in ["time", "social", "health", "mental", "money"]):
-                    # 验证数值范围
-                    time_value = max(min(float(wealth["time"]), 1.0), -1.0)
-                    social_value = max(min(float(wealth["social"]), 1.0), -1.0)
-                    health_value = max(min(float(wealth["health"]), 1.0), -1.0)
-                    mental_value = max(min(float(wealth["mental"]), 1.0), -1.0)
-                    money_value = max(float(wealth["money"]), 0.0)
-                    
-                    return {
-                        "time": round(time_value, 2),
-                        "social": round(social_value, 2),
-                        "health": round(health_value, 2),
-                        "mental": round(mental_value, 2),
-                        "money": round(money_value, 2)
-                    }
-                else:
-                    print(f"为{self.name}生成财富时JSON格式不完整: {wealth}")
-            except json.JSONDecodeError as e:
-                print(f"为{self.name}生成财富时JSON解析错误: {e}, 原始响应: {response[:100]}...")
-            except Exception as e:
-                print(f"为{self.name}生成财富时解析出错: {e}")
-                
+            wealth = self._extract_json_from_response(response)
+            if wealth and all(key in wealth for key in ["time", "social", "health", "mental", "money"]):
+                # 验证数值范围
+                time_value = max(min(float(wealth["time"]), 1.0), -1.0)
+                social_value = max(min(float(wealth["social"]), 1.0), -1.0)
+                health_value = max(min(float(wealth["health"]), 1.0), -1.0)
+                mental_value = max(min(float(wealth["mental"]), 1.0), -1.0)
+                money_value = max(float(wealth["money"]), 0.0)
+
+                return {
+                    "time": round(time_value, 2),
+                    "social": round(social_value, 2),
+                    "health": round(health_value, 2),
+                    "mental": round(mental_value, 2),
+                    "money": round(money_value, 2)
+                }
+            else:
+                print(f"为{self.name}生成财富时JSON格式不完整: {wealth}")
+
             # 如果解析失败，使用默认值
             return self._generate_default_wealth()
-                
+
         except Exception as e:
             print(f"为{self.name}生成财富数据时出错: {e}")
             return self._generate_default_wealth()
@@ -1239,6 +1206,21 @@ class BaseAgent(SimBaseAgent):
             return "社交中"
         else:
             return "活动中"
+
+    @staticmethod
+    def _extract_json_from_response(response: str) -> Optional[Dict]:
+        """从LLM响应中提取JSON对象"""
+        if not response:
+            return None
+        response = response.strip()
+        start_idx = response.find('{')
+        end_idx = response.rfind('}') + 1
+        if start_idx >= 0 and end_idx > start_idx:
+            try:
+                return json.loads(response[start_idx:end_idx])
+            except json.JSONDecodeError:
+                return None
+        return None
 
     def _generate_default_wealth(self) -> Dict[str, float]:
         """生成默认的财富数据，当LLM生成失败时使用"""

@@ -160,6 +160,15 @@ class SimulationController:
         """保存Session"""
         self._save_current_session(session_id)
 
+    def _add_notification(self, content: str, duration: float = 2.5):
+        """添加通知到场景视图"""
+        if self.current_view == "scenario" and hasattr(self, 'scenario_view'):
+            self.scenario_view.event_notifications.append({
+                "content": content,
+                "start_time": time.time(),
+                "duration": duration
+            })
+
     def _on_delete_session(self, session_id: str):
         """删除Session"""
         if self.session_manager.delete_session(session_id):
@@ -283,22 +292,10 @@ class SimulationController:
 
         if success:
             print(f"Session {session_id} 已保存")
-            # 显示保存成功提示
-            if self.current_view == "scenario" and hasattr(self, 'scenario_view'):
-                self.scenario_view.event_notifications.append({
-                    "content": f"✓ Session已保存",
-                    "start_time": time.time(),
-                    "duration": 2.5
-                })
+            self._add_notification("✓ Session已保存")
         else:
             print(f"Session {session_id} 保存失败")
-            # 显示保存失败提示
-            if self.current_view == "scenario" and hasattr(self, 'scenario_view'):
-                self.scenario_view.event_notifications.append({
-                    "content": f"✗ Session保存失败",
-                    "start_time": time.time(),
-                    "duration": 2.5
-                })
+            self._add_notification("✗ Session保存失败")
 
         return success
 
@@ -686,11 +683,7 @@ class SimulationController:
         self.interact_rounds_per_day = self.scenario_view.get_interact_rounds()
 
         # 显示提示
-        self.scenario_view.event_notifications.append({
-            "content": f"第 {self.current_day} 天开始",
-            "start_time": time.time(),
-            "duration": 3.0
-        })
+        self._add_notification(f"第 {self.current_day} 天开始", duration=3.0)
 
         # 重置轮数显示
         self.scenario_view.set_round(1)
