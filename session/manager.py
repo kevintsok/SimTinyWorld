@@ -375,7 +375,6 @@ class SessionManager:
             new_session_id = self.create_session(session_name, description, scenario_type)
 
             # 复制会话数据
-            target_path = self._get_session_path(new_session_id)
             source_agents_dir = os.path.join(source_session_dir, "agents")
 
             # 复制状态文件
