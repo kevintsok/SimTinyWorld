@@ -33,7 +33,6 @@ class MainView:
     - 右侧：根据选择显示对应内容
     """
 
-    # 配色方案
     BACKGROUND_COLOR = (30, 33, 40)
     PANEL_COLOR = (40, 44, 52)
     BUTTON_COLOR = (70, 130, 180)
@@ -42,7 +41,6 @@ class MainView:
     ACCENT_COLOR = (100, 160, 210)
     BORDER_COLOR = (60, 64, 72)
 
-    # 可用场景列表
     AVAILABLE_SCENARIOS = [
         ("daily_life", "日常生活", "日常生活的社交互动场景"),
         ("emergency", "突发事件", "社会突发事件的应急场景"),
@@ -396,18 +394,10 @@ class MainView:
         """场景选项点击处理"""
         self.selected_scenario = scenario_id
 
-        # 找到场景描述
-        scenario_desc = ""
-        for sid, _, desc in self.AVAILABLE_SCENARIOS:
+        scenario_name, scenario_desc = "", ""
+        for sid, name, desc in self.AVAILABLE_SCENARIOS:
             if sid == scenario_id:
-                scenario_desc = desc
-                break
-
-        # 更新场景详情文本
-        scenario_name = ""
-        for sid, name, _ in self.AVAILABLE_SCENARIOS:
-            if sid == scenario_id:
-                scenario_name = name
+                scenario_name, scenario_desc = name, desc
                 break
 
         self.scenario_detail_text = f"当前选择: {scenario_name}\n\n{scenario_desc}"
