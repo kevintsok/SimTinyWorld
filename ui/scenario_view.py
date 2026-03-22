@@ -100,17 +100,15 @@ class ScenarioView:
         # 信息面板区域 (右侧)
         self.panel_rect = pygame.Rect(int(width * 0.65), 0, int(width * 0.35), height)
 
-        # ===== 新增：智能体详情开关 =====
-        self.show_agent_details: bool = True  # 默认显示详情
-        self.selected_agent_id: Optional[str] = None  # 当前选中的智能体ID
-        self.detail_collapse_offset: float = 0.0  # 折叠动画偏移量 (0.0 = 完全展开, 1.0 = 完全折叠)
-        self.detail_collapse_target: float = 0.0  # 折叠动画目标值
-        self.detail_collapse_speed: float = 0.15  # 折叠动画速度
-        self.detail_scroll_offset: int = 0  # 详情面板滚动偏移
-        self.detail_content_height: int = 0  # 详情内容总高度（用于计算滚动限制）
+        self.show_agent_details: bool = True
+        self.selected_agent_id: Optional[str] = None
+        self.detail_collapse_offset: float = 0.0
+        self.detail_collapse_target: float = 0.0
+        self.detail_collapse_speed: float = 0.15
+        self.detail_scroll_offset: int = 0
+        self.detail_content_height: int = 0
 
-        # ===== 新增：详情开关按钮区域 =====
-        self.detail_toggle_rect: pygame.Rect = None  # 详情开关按钮区域
+        self.detail_toggle_rect: Optional[pygame.Rect] = None
 
         # 时代主题
         self.current_era = "default"
@@ -495,7 +493,7 @@ class ScenarioView:
         loc_type = loc.type
         icon_type = LOCATION_ICONS.get(loc_type, "default")
 
-        color = LOCATION_COLORS.get(loc_type, LOCATION_COLORS['default'])
+        color = LOCATION_COLORS.get(loc_type, LOCATION_COLORS.get('default'))
         dark_color = tuple(max(0, c - 40) for c in color)
         size = 32
 
