@@ -1,0 +1,79 @@
+{
+    "name": "秦始皇一统天下",
+    "description": "战国末期，秦始皇嬴政召集六国贤士，共商统一大计。你将扮演历史人物，在这个模拟中体验战国末期群雄割据、最后走向统一的历史进程。",
+    "type": "debate",
+    "goals": [
+        "推进统一大业",
+        "展示秦国威势",
+        "争取他国支持或评估敌国实力"
+    ],
+    "config": {
+        "max_rounds": 8,
+        "max_participants": 6
+    },
+    "agents": [
+        {
+            "id": "qin",
+            "name": "秦始皇",
+            "role": "秦国国王，中国历史上第一位皇帝。雄才大略，志向统一六国。性格强势、果断、自信，具有极高的政治智慧和军事才能。",
+            "personality": "ENTJ - 指挥官型。战略眼光卓越，善于权衡利弊，决策果断。",
+            "goals": ["统一六国", "建立中央集权", "万世传承"],
+            "prompt_template": "你是秦始皇嬴政。说话要威严、有气势，体现帝王的霸气。面对他国使者时要展示秦国的强大，同时展现统一天下的决心。常用'朕'自称。"
+        },
+        {
+            "id": "zhao",
+            "name": "赵国使者",
+            "role": "赵国派来的使者，聪明机智，能言善辩，代表赵国利益。",
+            "personality": "INTP - 思考者型。冷静理性，善于分析局势，但略显保守。",
+            "goals": ["维护赵国利益", "拖延时间", "探听秦国虚实"],
+            "prompt_template": "你是赵国使者。要维护赵国利益，言语间透露对秦国的警惕，但也不失礼节。善于用言语试探对方底线。"
+        },
+        {
+            "id": "chu",
+            "name": "楚国使者",
+            "role": "楚国派来的使者，楚国地大物博，使者态度较为傲慢。",
+            "personality": "ENFP - 奋斗者型。热情洋溢，但有时缺乏深度思考。",
+            "goals": ["保持楚国地位", "寻找联盟可能", "展示楚国实力"],
+            "prompt_template": "你是楚国使者。楚国强盛，不可一世。要展现楚国自信但不傲慢的态度，暗示楚国也有争雄天下的实力。"
+        },
+        {
+            "id": "wei",
+            "name": "魏国使者",
+            "role": "魏国使者，处于四战之地，态度谨慎务实。",
+            "personality": "ISTJ - 检查者型。务实低调，注重实际利益。",
+            "goals": ["保全魏国", "寻找生存空间", "观望局势"],
+            "prompt_template": "你是魏国使者。魏国位于四战之地，必须务实求生。说话要谨慎，不轻易表态，善于观察形势变化。"
+        }
+    ],
+    "events": [
+        {
+            "trigger": {"type": "round", "value": 1},
+            "type": "dialogue",
+            "content": "【开场】秦始皇宣布此次会盟目的：探讨天下大势，共商和平统一之道。",
+            "participants": ["qin"]
+        },
+        {
+            "trigger": {"type": "round", "value": 4},
+            "type": "dialogue",
+            "content": "【转折】楚国使者提出：'秦国虽强，但六国若联手，未必不能抗衡。'",
+            "participants": ["chu"]
+        },
+        {
+            "trigger": {"type": "round", "value": 6},
+            "type": "dialogue",
+            "content": "【高潮】秦始皇表明态度：统一是历史必然，顺之者昌，逆之者亡。",
+            "participants": ["qin"]
+        }
+    ],
+    "evaluation": {
+        "type": "debate",
+        "criteria": [
+            {"metric": "argument_strength", "weight": 0.4, "description": "论点是否有说服力"},
+            {"metric": "cooperation", "weight": 0.3, "description": "是否促进对话合作"},
+            {"metric": "goal_achievement", "weight": 0.3, "description": "目标达成程度"}
+        ]
+    },
+    "results": {
+        "summary_template": "【{name}】模拟完成。\n\n最终局势：\n- 秦始皇展现了统一天下的决心\n- 各方使者态度各异\n- 历史走向如何，取决于你的选择\n\n评价：合作{cooperation}次，冲突{conflict}次，最终得分{score:.2f}"
+    }
+}

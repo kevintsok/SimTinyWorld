@@ -147,7 +147,7 @@ def run_simulation(agents, args):
     }
 
     # 创建场景
-    scenario = get_scenario(args.scenario, scenario_config)
+    scenario = get_scenario(args.scenario, scenario_config, args.scenario_file)
 
     # 根据场景类型计算默认步数
     if args.scenario == "debate":
@@ -207,8 +207,10 @@ def main():
     parser.add_argument("--engine", type=str, default=None,
                       help="指定使用的LLM引擎类型（qwen, openai, deepseek）")
     parser.add_argument("--scenario", type=str, default="daily_life",
-                      choices=["daily_life", "emergency", "geopolitics", "debate"],
+                      choices=["daily_life", "emergency", "debate", "json"],
                       help="模拟场景类型")
+    parser.add_argument("--scenario-file", type=str, default=None,
+                      help="JSON场景文件路径（用于json场景类型）")
 
     args = parser.parse_args()
 

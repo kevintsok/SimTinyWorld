@@ -1,0 +1,55 @@
+{
+    "name": "测试辩论场景",
+    "description": "测试JSON场景定义系统的基本功能。",
+    "type": "debate",
+    "goals": [
+        "测试辩论系统",
+        "验证JSON配置"
+    ],
+    "config": {
+        "max_rounds": 5,
+        "max_participants": 4
+    },
+    "agents": [
+        {
+            "id": "agent1",
+            "name": "张三",
+            "role": "辩论正方代表",
+            "personality": "ENFP - 热情洋溢，善于表达",
+            "goals": ["论证自己的观点", "说服对方"],
+            "prompt_template": "你是张三，正方代表。说话要有激情，积极维护自己的立场。"
+        },
+        {
+            "id": "agent2",
+            "name": "李四",
+            "role": "辩论反方代表",
+            "personality": "INTJ - 冷静分析，逻辑严密",
+            "goals": ["反驳对方观点", "揭示逻辑漏洞"],
+            "prompt_template": "你是李四，反方代表。保持冷静，用逻辑反驳对方的论点。"
+        }
+    ],
+    "events": [
+        {
+            "trigger": {"type": "round", "value": 1},
+            "type": "dialogue",
+            "content": "【开场】主持人宣布辩题：AI是否会取代人类工作。",
+            "participants": []
+        },
+        {
+            "trigger": {"type": "round", "value": 3},
+            "type": "dialogue",
+            "content": "【转折】正方提出：AI可以创造更多新岗位。",
+            "participants": ["agent1"]
+        }
+    ],
+    "evaluation": {
+        "type": "debate",
+        "criteria": [
+            {"metric": "argument_strength", "weight": 0.5},
+            {"metric": "cooperation", "weight": 0.5}
+        ]
+    },
+    "results": {
+        "summary_template": "【测试场景】完成。合作{cooperation}次，冲突{conflict}次，得分{score:.2f}"
+    }
+}
