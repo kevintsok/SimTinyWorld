@@ -18,13 +18,8 @@ def create_new_agents(num_agents=20):
     Args:
         num_agents: 要创建的智能体数量，默认为20
     """
-    # 随机生成性别
-    genders = []
-    for _ in range(num_agents):
-        gender = random.choice(["男", "女"])
-        genders.append(gender)
-    
-    # 统计男性和女性数量
+    genders = [random.choice(["男", "女"]) for _ in range(num_agents)]
+
     male_count = genders.count("男")
     female_count = genders.count("女")
     
@@ -33,9 +28,8 @@ def create_new_agents(num_agents=20):
     # 不再使用LLM生成名字，直接使用本地名字库
     male_names = []
     female_names = []
-    
-    # 常见的中文姓氏
-    first_names = ["张", "王", "李", "赵", "刘", "陈", "杨", "黄", "周", "吴", 
+
+    first_names = ["张", "王", "李", "赵", "刘", "陈", "杨", "黄", "周", "吴",
                   "徐", "孙", "朱", "马", "胡", "郭", "林", "何", "高", "梁",
                   "郑", "罗", "宋", "谢", "唐", "韩", "曹", "许", "邓", "萧",
                   "冯", "曾", "程", "蔡", "彭", "潘", "袁", "於", "董", "余",
@@ -44,24 +38,21 @@ def create_new_agents(num_agents=20):
                   "廖", "姚", "方", "金", "邱", "夏", "谭", "韦", "贾", "邹",
                   "石", "熊", "孟", "秦", "阎", "薛", "侯", "雷", "白", "龙",
                   "段", "郝", "孔", "邵", "史", "毛", "常", "万", "顾", "赖"]
-    
-    # 常见的男性名字部分
-    male_second_names = ["伟", "强", "华", "明", "军", "杰", "涛", "超", "刚", "平", 
-                        "辉", "勇", "波", "斌", "浩", "鹏", "健", "磊", "建", "龙", 
+
+    male_second_names = ["伟", "强", "华", "明", "军", "杰", "涛", "超", "刚", "平",
+                        "辉", "勇", "波", "斌", "浩", "鹏", "健", "磊", "建", "龙",
                         "雷", "雨", "晨", "阳", "宇", "宁", "子", "豪", "志", "文",
                         "天", "翔", "鸿", "森", "思", "智", "涵", "瑞", "锐", "烨",
                         "嘉", "轩", "铭", "峰", "旭", "东", "昊", "奇", "航", "炜",
                         "宏", "胜", "利", "凯", "荣", "桦", "鑫", "博", "岩", "帆"]
-    
-    # 常见的女性名字部分
-    female_second_names = ["芳", "娜", "敏", "静", "丽", "艳", "洁", "燕", "红", "霞", 
-                          "倩", "婷", "玲", "娟", "英", "华", "萍", "莉", "文", "芬", 
+
+    female_second_names = ["芳", "娜", "敏", "静", "丽", "艳", "洁", "燕", "红", "霞",
+                          "倩", "婷", "玲", "娟", "英", "华", "萍", "莉", "文", "芬",
                           "兰", "珊", "妮", "娥", "琳", "雪", "琴", "璐", "颖", "梅",
                           "玉", "秀", "宁", "瑶", "怡", "婉", "馨", "媛", "嫣", "琦",
                           "晶", "茜", "岚", "瑾", "楠", "曼", "聆", "欣", "悦", "菲",
                           "佳", "涵", "彤", "莹", "雯", "珍", "月", "蓉", "伊", "纯"]
-    
-    # 生成所需数量的男性名字和女性名字
+
     for _ in range(male_count):
         first = random.choice(first_names)
         second = random.choice(male_second_names)
@@ -74,34 +65,30 @@ def create_new_agents(num_agents=20):
         name = f"{first}{second}"
         female_names.append(name)
     
-    # 确保名字不重复
     male_names = list(dict.fromkeys(male_names))
     female_names = list(dict.fromkeys(female_names))
-    
-    # 如果去重后名字不够，继续生成
+
+    male_names_set = set(male_names)
     while len(male_names) < male_count:
-        first = random.choice(first_names)
-        second = random.choice(male_second_names)
-        name = f"{first}{second}"
-        if name not in male_names:
+        name = f"{random.choice(first_names)}{random.choice(male_second_names)}"
+        if name not in male_names_set:
+            male_names_set.add(name)
             male_names.append(name)
-    
+
+    female_names_set = set(female_names)
     while len(female_names) < female_count:
-        first = random.choice(first_names)
-        second = random.choice(female_second_names)
-        name = f"{first}{second}"
-        if name not in female_names:
+        name = f"{random.choice(first_names)}{random.choice(female_second_names)}"
+        if name not in female_names_set:
+            female_names_set.add(name)
             female_names.append(name)
-    
-    # 职业列表
-    occupations = ["学生", "教师", "医生", "工程师", "律师", "会计", "销售", "设计师", 
+
+    occupations = ["学生", "教师", "医生", "工程师", "律师", "会计", "销售", "设计师",
                   "程序员", "记者", "作家", "艺术家", "演员", "音乐家", "厨师", "健身教练",
                   "企业家", "研究员", "公务员", "自由职业者", "工人", "服务员", "农民", "司机"]
-    
-    # MBTI类型
+
     mbti_types = ["INTJ", "INTP", "ENTJ", "ENTP", "INFJ", "INFP", "ENFJ", "ENFP",
                  "ISTJ", "ISFJ", "ESTJ", "ESFJ", "ISTP", "ISFP", "ESTP", "ESFP"]
-    
+
     # 分配名字给性别
     agents = []
     male_index = 0
