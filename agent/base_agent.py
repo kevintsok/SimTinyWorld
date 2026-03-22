@@ -201,7 +201,8 @@ class BaseAgent(SimBaseAgent):
         
         return mood
     
-    def _get_mood_description(self, mood_value):
+    @staticmethod
+    def _get_mood_description(mood_value):
         """根据心情值获取对应的描述"""
         if mood_value < -0.8:
             return "沮丧"
