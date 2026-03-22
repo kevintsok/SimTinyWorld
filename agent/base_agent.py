@@ -77,27 +77,21 @@ class BaseAgent(SimBaseAgent):
             init_wealth: 初始财富
             engine: LLM引擎
         """
-        # 调用父类初始化
         super().__init__(id or str(uuid.uuid4()), name or "Unknown")
 
-        # 设置智能体基本属性
         self.gender = gender
         self.age = age
         self.mbti = mbti
         self.background = background
         self.appearance = appearance
-        
-        # 设置终极目标
-        self.ultimate_goal = "繁衍"  # 智能体的终极目标是繁衍
-        
-        # 状态和位置相关
-        self.status = "空闲"  # 默认状态为空闲
-        self.current_plan = None  # 当前行动计划
-        self.daily_plan = []  # 每日计划列表
-        self.current_plan_index = 0  # 当前计划索引
-        
-        # 初始化LLM引擎（需要在初始化财富之前）
-        # 优先使用全局引擎
+
+        self.ultimate_goal = "繁衍"
+
+        self.status = "空闲"
+        self.current_plan = None
+        self.daily_plan = []
+        self.current_plan_index = 0
+
         from llm_engine.factory import has_global_engine, get_global_engine
         if engine:
             self.llm_engine = engine
@@ -106,35 +100,26 @@ class BaseAgent(SimBaseAgent):
         else:
             self.llm_engine = EngineVerifier().get_first_available_engine()
         
-        # 初始化财富
         if init_wealth:
             self.wealth = init_wealth
         else:
-            # 只有在背景和外观都设置好的情况下才尝试生成动态财富
             if self.background and self.appearance and self.name and self.mbti:
-                # 尝试生成个性化财富
                 try:
-                    self.wealth = self._generate_default_wealth()  # 先生成默认财富以防生成失败
-                    dynamic_wealth = self._generate_wealth()  # 尝试生成动态财富
-                    if dynamic_wealth:  # 如果生成成功，使用动态财富
+                    self.wealth = self._generate_default_wealth()
+                    dynamic_wealth = self._generate_wealth()
+                    if dynamic_wealth:
                         self.wealth = dynamic_wealth
                 except Exception as e:
                     print(f"生成财富时出错: {e}，使用随机默认财富")
                     self.wealth = self._generate_default_wealth()
             else:
-                # 生成随机化的默认财富
                 self.wealth = self._generate_default_wealth()
-        
-        # 初始化心情系统
+
         self.mood = self._generate_initial_mood()
-        
-        # 初始化记忆存储
         self._init_memory_storage(vector_store_dir)
 
-        # 生成初始长期记忆（如果还没有长期记忆）
         if not self.long_term_memory:
             if self.llm_engine and hasattr(self.llm_engine, 'mock_mode') and not self.llm_engine.mock_mode:
-                # LLM可用，生成LLM驱动的记忆
                 self._generate_initial_long_term_memories()
             else:
                 # LLM不可用（mock模式），生成基础记忆
@@ -1017,13 +1002,10 @@ class BaseAgent(SimBaseAgent):
         else:
             agent.appearance = agent._generate_appearance()
             
-        # 加载财富信息
         if "wealth" in identity:
             agent.wealth = identity["wealth"]
         else:
             agent.wealth = agent._generate_wealth()
-            
-        # 加载心情信息
         if "mood" in identity:
             agent.mood = identity["mood"]
             agent.mood_history = []  # 初始化心情历史
@@ -1283,8 +1265,6 @@ class BaseAgent(SimBaseAgent):
             bool: 是否成功设置计划
         """
         try:
-            # 解析JSON
-            import json
             daily_plan = json.loads(plan_json)
             
             # 验证并清理计划
