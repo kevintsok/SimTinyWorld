@@ -115,6 +115,53 @@ class JSONScenario(BaseScenario):
         # 加载评估配置
         self.evaluation = self.scenario_data.get("evaluation", {})
 
+        # 加载配置
+        self.config_data = self.scenario_data.get("config", {})
+
+    def get_era(self) -> str:
+        """根据场景名称和描述判断时代主题"""
+        name_lower = self.name.lower()
+        desc_lower = self.description.lower()
+
+        # 古代场景
+        ancient_keywords = ["公元前", "战国", "罗马", "希腊", "秦", "汉", "三国", "唐朝", "美索不达米亚", "埃及", "巴比伦", "波斯", "祭司", "苏美尔"]
+        for kw in ancient_keywords:
+            if kw in name_lower or kw in desc_lower:
+                return "ancient"
+
+        # 中世纪场景
+        medieval_keywords = ["十字军", "中世纪", "骑士", "城堡", "领主", "教会", "维京", "法兰克", "拜占庭"]
+        for kw in medieval_keywords:
+            if kw in name_lower or kw in desc_lower:
+                return "medieval"
+
+        # 近代早期场景
+        early_modern_keywords = ["革命", "启蒙", "法国大革命", "美国独立", "拿破仑", "工业革命", "殖民", "帝国主义"]
+        for kw in early_modern_keywords:
+            if kw in name_lower or kw in desc_lower:
+                return "early_modern"
+
+        # 现代场景
+        modern_keywords = ["冷战", "现代", "当代", "二战", "1945", "21世纪", "联合国", "欧盟"]
+        for kw in modern_keywords:
+            if kw in name_lower or kw in desc_lower:
+                return "modern"
+
+        return "default"
+
+    def get_scenario_info(self) -> Dict[str, Any]:
+        """获取场景信息用于UI显示"""
+        return {
+            "name": self.name,
+            "description": self.description,
+            "type": self.scenario_data.get("type", "dialogue"),
+            "goals": self.scenario_data.get("goals", []),
+            "era": self.get_era(),
+            "max_rounds": self.config_data.get("max_rounds", 10),
+            "events": self.events,
+            "agents": self.agent_configs
+        }
+
         # 加载结果配置
         self.results_config = self.scenario_data.get("results", {})
 

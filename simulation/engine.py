@@ -165,6 +165,25 @@ class SimulationEngine:
 
             return step_result
 
+    def get_scenario_info(self) -> Dict[str, Any]:
+        """获取场景信息
+
+        Returns:
+            Dict[str, Any]: 场景信息字典
+        """
+        if hasattr(self.scenario, 'get_scenario_info'):
+            return self.scenario.get_scenario_info()
+        return {
+            "name": getattr(self.scenario, 'name', '未知场景'),
+            "description": getattr(self.scenario, 'description', ''),
+            "type": "dialogue",
+            "goals": [],
+            "era": "default",
+            "max_rounds": 10,
+            "events": [],
+            "agents": []
+        }
+
     def run(self, steps: Optional[int] = None) -> Dict[str, Any]:
         """运行模拟
 

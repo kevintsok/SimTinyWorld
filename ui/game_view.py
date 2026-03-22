@@ -36,8 +36,58 @@ MBTI_COLORS = {
 E_SHAPE = 'triangle'  # 外向
 I_SHAPE = 'circle'   # 内向
 
-# 位置类型图标颜色
+# ===== 时代主题配色方案 =====
+ERA_THEMES = {
+    "ancient": {  # 古代（战国、罗马等）
+        "name": "古代",
+        "bg": (45, 38, 30),
+        "map_bg": (50, 43, 35),
+        "panel_bg": (55, 48, 40),
+        "grid": (70, 62, 50),
+        "accent": (200, 160, 80),
+        "primary": (180, 140, 60),
+    },
+    "medieval": {  # 中世纪（十字军、城堡）
+        "name": "中世纪",
+        "bg": (35, 32, 40),
+        "map_bg": (40, 36, 48),
+        "panel_bg": (45, 40, 52),
+        "grid": (60, 54, 68),
+        "accent": (140, 120, 180),
+        "primary": (120, 100, 160),
+    },
+    "early_modern": {  # 近代早期（法国大革命、启蒙运动）
+        "name": "近代",
+        "bg": (38, 36, 42),
+        "map_bg": (42, 40, 48),
+        "panel_bg": (48, 44, 52),
+        "grid": (65, 60, 70),
+        "accent": (180, 100, 100),
+        "primary": (160, 80, 80),
+    },
+    "modern": {  # 现代（冷战、当代）
+        "name": "现代",
+        "bg": (30, 33, 40),
+        "map_bg": (35, 38, 45),
+        "panel_bg": (40, 44, 52),
+        "grid": (50, 54, 62),
+        "accent": (100, 149, 237),
+        "primary": (80, 130, 200),
+    },
+    "default": {  # 默认
+        "name": "默认",
+        "bg": (30, 33, 40),
+        "map_bg": (35, 38, 45),
+        "panel_bg": (40, 44, 52),
+        "grid": (50, 54, 62),
+        "accent": (100, 149, 237),
+        "primary": (80, 130, 200),
+    }
+}
+
+# 位置类型图标颜色 - 历史场景扩展
 LOCATION_COLORS = {
+    # 现代场景
     "公司": (100, 149, 237),   # 矢车菊蓝
     "公园": (60, 179, 113),    # 中等海洋绿
     "学校": (255, 165, 0),     # 橙色
@@ -50,7 +100,58 @@ LOCATION_COLORS = {
     "银行": (255, 215, 0),     # 金色
     "电影院": (188, 143, 143), # 浅玫瑰棕色
     "超市": (255, 140, 0),     # 深橙色
+    # 历史场景 - 古代/中世纪
+    "宫殿": (180, 140, 60),    # 金色
+    "神殿": (200, 180, 100),   # 浅金
+    "城墙": (139, 119, 101),   # 灰褐
+    "战场": (180, 60, 60),     # 血红
+    "市场": (210, 180, 140),   # 秘鲁香槟
+    "港口": (64, 224, 208),    # 绿松石
+    "城堡": (105, 105, 105),   # 深灰
+    "军营": (139, 90, 43),     # 巧克力
+    "议会": (123, 104, 238),   # 中紫
+    "神庙": (218, 165, 32),    # 金菊
+    "驿道": (160, 120, 90),   # 浅褐
+    # 近代场景
+    "官邸": (160, 100, 140),   # 灰紫
+    "使馆": (100, 149, 237),   # 矢车菊蓝
+    "议会厅": (178, 190, 195), # 银灰
+    "工厂": (105, 105, 105),   # 深灰
     "default": (100, 100, 100), # 灰色
+}
+
+# 位置类型图标形状 (用于绘制不同建筑风格)
+LOCATION_ICONS = {
+    # 现代
+    "公司": "building",
+    "公园": "tree",
+    "学校": "school",
+    "医院": "cross",
+    "餐厅": "restaurant",
+    "商场": "mall",
+    "图书馆": "book",
+    "健身房": "gym",
+    "咖啡厅": "cafe",
+    "银行": "bank",
+    "电影院": "film",
+    "超市": "cart",
+    # 历史
+    "宫殿": "palace",
+    "神殿": "temple",
+    "城墙": "wall",
+    "战场": "battlefield",
+    "市场": "market",
+    "港口": "port",
+    "城堡": "castle",
+    "军营": "barracks",
+    "议会": "parliament",
+    "神庙": "temple",
+    "驿道": "road",
+    "官邸": "mansion",
+    "使馆": "embassy",
+    "议会厅": "chamber",
+    "工厂": "factory",
+    "default": "default",
 }
 
 
@@ -79,6 +180,23 @@ class AgentVisual:
     short_term_memory_count: int = 0
     personality_traits: List[str] = None  # 性格特点
     core_values: List[str] = None  # 核心价值观
+    # 历史场景扩展
+    role: str = ""  # 历史人物角色
+    era: str = ""  # 时代背景
+    goals: List[str] = None  # 个人目标
+    historical_name: str = ""  # 历史人物名称（如"秦始皇"）
+
+    def __post_init__(self):
+        if self.wealth is None:
+            self.wealth = {"time": 0, "social": 0, "health": 0.5, "mental": 0.5, "money": 0}
+        if self.recent_memories is None:
+            self.recent_memories = []
+        if self.personality_traits is None:
+            self.personality_traits = []
+        if self.core_values is None:
+            self.core_values = []
+        if self.goals is None:
+            self.goals = []
 
     def __post_init__(self):
         if self.wealth is None:
@@ -177,11 +295,100 @@ class GameView:
         # 信息面板区域 (右侧)
         self.panel_rect = pygame.Rect(int(width * 0.65), 0, int(width * 0.35), height)
 
-        # 颜色
-        self.bg_color = (30, 33, 40)
-        self.map_bg_color = (35, 38, 45)
-        self.panel_bg_color = (40, 44, 52)
-        self.grid_color = (50, 54, 62)
+        # 时代主题
+        self.current_era = "default"
+        self._apply_era_theme("default")
+
+        # 场景信息
+        self.scenario_name = "智能体模拟"
+        self.scenario_description = ""
+        self.scenario_goals: List[str] = []
+        self.scenario_type = "dialogue"  # dialogue, debate, cooperation, emergency
+
+        # 时间线
+        self.current_round = 1
+        self.max_rounds = 10
+        self.events: List[Dict[str, Any]] = []
+        self.triggered_events: Set[int] = set()
+        self.event_notifications: List[Dict[str, Any]] = []  # 当前显示的事件通知
+
+        # 顶部信息栏高度
+        self.header_height = 50
+
+    def _apply_era_theme(self, era: str):
+        """应用时代主题配色"""
+        theme = ERA_THEMES.get(era, ERA_THEMES["default"])
+        self.current_era = era
+        self.bg_color = theme["bg"]
+        self.map_bg_color = theme["map_bg"]
+        self.panel_bg_color = theme["panel_bg"]
+        self.grid_color = theme["grid"]
+        self.accent_color = theme["accent"]
+        self.primary_color = theme["primary"]
+
+    def set_scenario_info(self, name: str, description: str = "", goals: List[str] = None,
+                         scenario_type: str = "dialogue", era: str = "default",
+                         max_rounds: int = 10):
+        """设置场景信息
+
+        Args:
+            name: 场景名称
+            description: 场景描述
+            goals: 场景目标列表
+            scenario_type: 场景类型 (dialogue/debate/cooperation/emergency)
+            era: 时代主题 (ancient/medieval/early_modern/modern/default)
+            max_rounds: 最大轮数
+        """
+        self.scenario_name = name
+        self.scenario_description = description
+        self.scenario_goals = goals or []
+        self.scenario_type = scenario_type
+        self.max_rounds = max_rounds
+        self.current_round = 1
+        self._apply_era_theme(era)
+
+    def add_event(self, round_num: int, content: str, participants: List[str] = None):
+        """添加事件到时间线
+
+        Args:
+            round_num: 触发轮数
+            content: 事件内容
+            participants: 参与者ID列表
+        """
+        self.events.append({
+            "round": round_num,
+            "content": content,
+            "participants": participants or []
+        })
+
+    def set_round(self, round_num: int):
+        """设置当前轮数"""
+        self.current_round = round_num
+
+    def trigger_event(self, event_index: int) -> Optional[Dict[str, Any]]:
+        """触发事件"""
+        if event_index in self.triggered_events:
+            return None
+
+        if event_index < len(self.events):
+            event = self.events[event_index]
+            self.triggered_events.add(event_index)
+            # 添加通知
+            self.event_notifications.append({
+                "content": event["content"],
+                "start_time": time.time(),
+                "duration": 4.0
+            })
+            return event
+        return None
+
+    def update_events(self):
+        """更新事件通知"""
+        current_time = time.time()
+        self.event_notifications = [
+            n for n in self.event_notifications
+            if current_time - n["start_time"] < n["duration"]
+        ]
 
     def set_locations(self, locations: Dict[str, dict], connections: Dict[str, List[Tuple[str, int]]]):
         """设置位置数据
@@ -205,7 +412,9 @@ class GameView:
                   mood_value: float = 0.0, mood_desc: str = "平静", status: str = "空闲",
                   wealth: Dict[str, float] = None, recent_memories: List[str] = None,
                   personality_traits: List[str] = None, core_values: List[str] = None,
-                  long_term_memory_count: int = 0, short_term_memory_count: int = 0):
+                  long_term_memory_count: int = 0, short_term_memory_count: int = 0,
+                  role: str = "", era: str = "", goals: List[str] = None,
+                  historical_name: str = ""):
         """添加智能体
 
         Args:
@@ -222,6 +431,10 @@ class GameView:
             core_values: 核心价值观列表
             long_term_memory_count: 长期记忆数量
             short_term_memory_count: 短期记忆数量
+            role: 历史角色
+            era: 时代背景
+            goals: 个人目标
+            historical_name: 历史人物名称
         """
         # 获取位置坐标
         loc = self.locations.get(location)
@@ -247,7 +460,11 @@ class GameView:
             personality_traits=personality_traits or [],
             core_values=core_values or [],
             long_term_memory_count=long_term_memory_count,
-            short_term_memory_count=short_term_memory_count
+            short_term_memory_count=short_term_memory_count,
+            role=role,
+            era=era,
+            goals=goals or [],
+            historical_name=historical_name or name
         )
 
         # 更新位置中的智能体列表
@@ -343,6 +560,9 @@ class GameView:
 
     def update(self):
         """更新视图状态"""
+        # 更新事件通知
+        self.update_events()
+
         current_time = time.time()
 
         # 更新智能体位置动画
@@ -434,32 +654,134 @@ class GameView:
         """绘制位置"""
         x, y = loc.position
         loc_type = loc.type
+        icon_type = LOCATION_ICONS.get(loc_type, "default")
 
         # 获取颜色
         color = LOCATION_COLORS.get(loc_type, LOCATION_COLORS['default'])
+        dark_color = tuple(max(0, c - 40) for c in color)
 
-        # 绘制建筑图标
-        size = 30
-        # 主体
-        pygame.draw.rect(surface, color, (x - size//2, y - size//2, size, size), border_radius=5)
+        size = 32
 
-        # 房顶
-        roof_points = [
-            (x - size//2 - 3, y - size//2),
-            (x + size//2 + 3, y - size//2),
-            (x, y - size//2 - 15)
-        ]
-        pygame.draw.polygon(surface, tuple(max(0, c - 30) for c in color), roof_points)
+        # 根据图标类型绘制不同的建筑
+        if icon_type == "palace":
+            # 宫殿 - 金字塔形屋顶
+            pygame.draw.rect(surface, color, (x - size//2, y - size//3, size, size//2), border_radius=2)
+            roof_points = [
+                (x - size//2 - 5, y - size//3),
+                (x + size//2 + 5, y - size//3),
+                (x, y - size - 10)
+            ]
+            pygame.draw.polygon(surface, dark_color, roof_points)
+            # 台阶
+            for i in range(3):
+                pygame.draw.rect(surface, dark_color, (x - size//2 + i*5, y + size//3 + i*3, size - i*10, 3))
+
+        elif icon_type == "temple":
+            # 神殿 - 罗马/希腊柱式
+            pygame.draw.rect(surface, color, (x - size//2, y - size//2, size, size), border_radius=2)
+            # 三角形屋顶
+            roof_points = [
+                (x - size//2 - 3, y - size//2),
+                (x + size//2 + 3, y - size//2),
+                (x, y - size - 5)
+            ]
+            pygame.draw.polygon(surface, dark_color, roof_points)
+            # 柱子
+            for col_x in [x - 12, x, x + 12]:
+                pygame.draw.rect(surface, (200, 200, 200), (col_x - 2, y - size//3, 4, size//2))
+
+        elif icon_type == "castle":
+            # 城堡 - 塔楼
+            pygame.draw.rect(surface, color, (x - size//2, y - size//3, size, size//2 + size//3))
+            # 塔顶
+            pygame.draw.polygon(surface, dark_color, [
+                (x - size//2 - 3, y - size//3),
+                (x + size//2 + 3, y - size//3),
+                (x, y - size - 5)
+            ])
+            # 旗子
+            pygame.draw.line(surface, (255, 200, 100), (x, y - size - 5), (x, y - size - 20), 2)
+            pygame.draw.polygon(surface, (200, 50, 50), [(x, y - size - 20), (x + 10, y - size - 15), (x, y - size - 10)])
+
+        elif icon_type == "market":
+            # 市场 - 帐篷式
+            pygame.draw.rect(surface, color, (x - size//2, y, size, size//3), border_radius=2)
+            roof_points = [
+                (x - size//2 - 5, y),
+                (x + size//2 + 5, y),
+                (x, y - size//2)
+            ]
+            pygame.draw.polygon(surface, dark_color, roof_points)
+
+        elif icon_type == "wall":
+            # 城墙 - 防御墙
+            pygame.draw.rect(surface, color, (x - size//2, y - size//3, size, size//2))
+            # 城垛
+            for i in range(5):
+                pygame.draw.rect(surface, dark_color, (x - size//2 + i*8, y - size//2, 6, 8))
+
+        elif icon_type == "battlefield":
+            # 战场 - 交叉剑
+            pygame.draw.rect(surface, color, (x - size//2, y - size//4, size, size//2), border_radius=3)
+            # 剑图标
+            pygame.draw.line(surface, (200, 200, 200), (x - 10, y - 10), (x + 10, y + 10), 3)
+            pygame.draw.line(surface, (200, 200, 200), (x + 10, y - 10), (x - 10, y + 10), 3)
+
+        elif icon_type == "port":
+            # 港口 - 船锚
+            pygame.draw.rect(surface, color, (x - size//2, y - size//4, size, size//2), border_radius=2)
+            # 锚
+            pygame.draw.circle(surface, (200, 200, 200), (x, y - 5), 6, 2)
+            pygame.draw.line(surface, (200, 200, 200), (x, y), (x, y + 12), 2)
+            pygame.draw.line(surface, (200, 200, 200), (x - 6, y + 10), (x + 6, y + 10), 2)
+
+        elif icon_type == "mansion":
+            # 官邸 - 大房子
+            pygame.draw.rect(surface, color, (x - size//2, y - size//3, size, size//2 + size//6))
+            roof_points = [
+                (x - size//2 - 2, y - size//3),
+                (x + size//2 + 2, y - size//3),
+                (x, y - size - 3)
+            ]
+            pygame.draw.polygon(surface, dark_color, roof_points)
+
+        elif icon_type == "cross":
+            # 医院 - 十字
+            pygame.draw.rect(surface, color, (x - size//2, y - size//4, size, size//2), border_radius=2)
+            # 十字
+            pygame.draw.rect(surface, (255, 255, 255), (x - 3, y - size//2, 6, size))
+
+        elif icon_type == "tree":
+            # 公园 - 树
+            pygame.draw.circle(surface, (60, 179, 113), (x, y - 5), size//3)
+            pygame.draw.rect(surface, (139, 90, 43), (x - 4, y, 8, size//3))
+
+        elif icon_type == "building":
+            # 公司/一般建筑
+            pygame.draw.rect(surface, color, (x - size//2, y - size//3, size, size//2 + size//3), border_radius=2)
+            # 窗户
+            for wx in [x - 8, x, x + 8]:
+                pygame.draw.rect(surface, (200, 220, 255), (wx - 3, y - size//4, 6, 8))
+
+        else:
+            # 默认 - 方形建筑
+            pygame.draw.rect(surface, color, (x - size//2, y - size//3, size, size//2 + size//6), border_radius=3)
+            roof_points = [
+                (x - size//2 - 2, y - size//3),
+                (x + size//2 + 2, y - size//3),
+                (x, y - size - 5)
+            ]
+            pygame.draw.polygon(surface, dark_color, roof_points)
 
         # 绘制位置名称
         name_text = self.font.render(loc.name, True, (220, 220, 220))
-        name_rect = name_text.get_rect(center=(x, y + size//2 + 15))
+        name_rect = name_text.get_rect(center=(x, y + size//2 + 18))
         surface.blit(name_text, name_rect)
 
         # 绘制智能体数量
         if loc.agents:
             count_text = self.font.render(f"({len(loc.agents)})", True, (180, 180, 180))
-            count_rect = count_text.get_rect(center=(x, y + size//2 + 30))
+            count_rect = count_text.get_rect(center=(x, y + size//2 + 33))
             surface.blit(count_text, count_rect)
 
     def _draw_agent(self, surface: pygame.Surface, agent: AgentVisual):
@@ -551,6 +873,139 @@ class GameView:
 
         surface.blit(dialog_surface, (box_x, box_y))
 
+    def draw_header(self, surface: pygame.Surface):
+        """绘制顶部场景信息栏"""
+        header_rect = pygame.Rect(0, 0, self.width, self.header_height)
+
+        # 背景渐变效果
+        pygame.draw.rect(surface, self.panel_bg_color, header_rect)
+
+        # 底部边框
+        pygame.draw.line(surface, self.accent_color,
+                        (0, header_rect.bottom - 1),
+                        (header_rect.right, header_rect.bottom - 1), 2)
+
+        # 场景名称
+        name_text = self.font_title.render(self.scenario_name, True, (255, 255, 255))
+        surface.blit(name_text, (20, 12))
+
+        # 场景类型标签
+        type_labels = {
+            "dialogue": "对话",
+            "debate": "辩论",
+            "cooperation": "协作",
+            "emergency": "突发事件"
+        }
+        type_text = self.font.render(f"[{type_labels.get(self.scenario_type, self.scenario_type)}]", True, self.accent_color)
+        surface.blit(type_text, (name_text.get_width() + 30, 18))
+
+        # 轮数指示器
+        round_text = self.font.render(f"第 {self.current_round} / {self.max_rounds} 轮", True, (200, 200, 200))
+        round_rect = round_text.get_rect(right=self.width - 20, centery=self.header_height // 2)
+        surface.blit(round_text, round_rect)
+
+        # 时间线进度条
+        progress_width = 150
+        progress_x = round_rect.left - progress_width - 20
+        progress_y = self.header_height // 2 - 5
+
+        pygame.draw.rect(surface, (60, 64, 72), (progress_x, progress_y, progress_width, 10), border_radius=3)
+        fill_width = int(self.current_round / self.max_rounds * progress_width)
+        pygame.draw.rect(surface, self.accent_color, (progress_x, progress_y, fill_width, 10), border_radius=3)
+
+    def draw_timeline(self, surface: pygame.Surface):
+        """绘制时间线面板"""
+        timeline_height = 60
+        timeline_rect = pygame.Rect(0, self.header_height, self.map_rect.width, timeline_height)
+
+        # 背景
+        pygame.draw.rect(surface, self.map_bg_color, timeline_rect)
+        pygame.draw.line(surface, self.grid_color,
+                        (0, timeline_rect.bottom),
+                        (timeline_rect.right, timeline_rect.bottom), 1)
+
+        # 时间线标签
+        label = self.font.render("时间线:", True, (150, 150, 150))
+        surface.blit(label, (15, timeline_rect.y + 8))
+
+        # 时间线节点
+        node_y = timeline_rect.y + 35
+        node_spacing = min(80, (timeline_rect.width - 100) // max(self.max_rounds, 1))
+        start_x = 80
+
+        for i in range(1, self.max_rounds + 1):
+            node_x = start_x + (i - 1) * node_spacing
+
+            # 节点圆圈
+            is_past = i < self.current_round
+            is_current = i == self.current_round
+            is_future = i > self.current_round
+
+            if is_past:
+                color = self.accent_color
+            elif is_current:
+                color = (255, 255, 255)
+            else:
+                color = (80, 80, 80)
+
+            pygame.draw.circle(surface, color, (node_x, node_y), 8)
+
+            if is_current:
+                pygame.draw.circle(surface, self.accent_color, (node_x, node_y), 12, 2)
+
+            # 轮数文字
+            round_num = self.font.render(str(i), True, (200, 200, 200) if is_future else (50, 50, 50))
+            round_rect = round_num.get_rect(center=(node_x, node_y + 20))
+            surface.blit(round_num, round_rect)
+
+            # 检查是否有事件
+            has_event = any(e.get("round") == i for e in self.events)
+            if has_event:
+                # 事件标记点
+                event_color = (255, 200, 100) if is_past or is_current else (100, 100, 100)
+                pygame.draw.circle(surface, event_color, (node_x, node_y), 4)
+
+        # 连接线
+        for i in range(1, self.max_rounds):
+            x1 = start_x + (i - 1) * node_spacing
+            x2 = start_x + i * node_spacing
+            is_past = i < self.current_round
+            line_color = self.accent_color if is_past else (60, 60, 60)
+            pygame.draw.line(surface, line_color, (x1 + 8, node_y), (x2 - 8, node_y), 2)
+
+    def draw_event_notifications(self, surface: pygame.Surface):
+        """绘制事件通知弹窗"""
+        for i, notif in enumerate(self.event_notifications):
+            elapsed = time.time() - notif["start_time"]
+            fade_start = notif["duration"] - 1.0
+
+            # 计算透明度
+            if elapsed > fade_start:
+                alpha = int(255 * (notif["duration"] - elapsed))
+            else:
+                alpha = 255
+            alpha = max(0, min(255, alpha))
+
+            # 通知框尺寸和位置
+            box_width = 400
+            box_height = 60
+            box_x = (self.width - box_width) // 2
+            box_y = 80 + i * 70
+
+            # 背景
+            notif_surface = pygame.Surface((box_width, box_height), pygame.SRCALPHA)
+            pygame.draw.rect(notif_surface, (40, 44, 52, alpha),
+                           (0, 0, box_width, box_height), border_radius=8)
+            pygame.draw.rect(notif_surface, (self.accent_color[0], self.accent_color[1], self.accent_color[2], alpha),
+                           (0, 0, box_width, box_height), 2, border_radius=8)
+
+            # 事件内容
+            event_text = self.font_large.render(notif["content"], True, (255, 255, 255))
+            event_rect = event_text.get_rect(center=(box_width // 2, box_height // 2))
+            notif_surface.blit(event_text, event_rect)
+
+            surface.blit(notif_surface, (box_x, box_y))
+
     def draw_panel(self, surface: pygame.Surface, selected_agent_id: Optional[str] = None):
         """绘制右侧信息面板"""
         # 背景
@@ -585,11 +1040,19 @@ class GameView:
                             5, agent_rect.height), border_radius=2)
 
             # 名称和MBTI
-            name_text = self.font.render(agent.name, True, (255, 255, 255))
-            surface.blit(name_text, (agent_rect.x + 15, agent_rect.y + 8))
+            # 如果有历史名称，显示历史名称
+            display_name = agent.historical_name if agent.historical_name and agent.historical_name != agent.name else agent.name
+            name_text = self.font.render(display_name, True, (255, 255, 255))
+            surface.blit(name_text, (agent_rect.x + 15, agent_rect.y + 5))
 
-            mbti_text = self.font.render(agent.mbti, True, (180, 180, 180))
-            surface.blit(mbti_text, (agent_rect.x + 15, agent_rect.y + 28))
+            # 角色标签（如果有）
+            if agent.role:
+                role_short = agent.role[:15] + "..." if len(agent.role) > 15 else agent.role
+                role_text = self.font.render(role_short, True, self.accent_color)
+                surface.blit(role_text, (agent_rect.x + 15, agent_rect.y + 22))
+            else:
+                mbti_text = self.font.render(agent.mbti, True, (180, 180, 180))
+                surface.blit(mbti_text, (agent_rect.x + 15, agent_rect.y + 22))
 
             # 位置
             loc_name = "未知"
@@ -618,10 +1081,27 @@ class GameView:
                         (self.panel_rect.right, y_offset), 2)
         y_offset += 15
 
+        # ===== 历史人物信息 =====
+        if agent.role or agent.historical_name:
+            # 角色名称背景
+            role_bg = pygame.Rect(self.panel_rect.x + 20, y_offset, panel_width, 45)
+            pygame.draw.rect(surface, (50, 54, 62), role_bg, border_radius=5)
+
+            # 历史人物名称
+            if agent.historical_name and agent.historical_name != agent.name:
+                hist_name = self.font_large.render(agent.historical_name, True, self.accent_color)
+                surface.blit(hist_name, (self.panel_rect.x + 25, y_offset + 3))
+
+            # 角色描述
+            if agent.role:
+                role_text = self.font.render(agent.role[:30], True, (180, 180, 180))
+                surface.blit(role_text, (self.panel_rect.x + 25, y_offset + 25))
+            y_offset += 52
+
         # 标题
         title = self.font_large.render(f"详情: {agent.name}", True, (255, 255, 255))
         surface.blit(title, (self.panel_rect.x + 20, y_offset))
-        y_offset += 35
+        y_offset += 30
 
         # ===== 基本信息 =====
         info_items = [
@@ -636,6 +1116,19 @@ class GameView:
             surface.blit(label_text, (self.panel_rect.x + 25, y_offset))
             surface.blit(value_text, (self.panel_rect.x + 90, y_offset))
             y_offset += 22
+
+        # ===== 个人目标 =====
+        if agent.goals:
+            y_offset += 5
+            goals_label = self.font_large.render("目标", True, self.accent_color)
+            surface.blit(goals_label, (self.panel_rect.x + 20, y_offset))
+            y_offset += 20
+
+            for i, goal in enumerate(agent.goals[:3]):
+                goal_text = self.font.render(f"• {goal[:25]}", True, (200, 200, 180))
+                surface.blit(goal_text, (self.panel_rect.x + 25, y_offset))
+                y_offset += 18
+            y_offset += 5
 
         # ===== 性格特点 =====
         if agent.personality_traits:
@@ -844,8 +1337,30 @@ class GameView:
         # 清屏
         self.screen.fill(self.bg_color)
 
+        # 绘制顶部信息栏
+        self.draw_header(self.screen)
+
+        # 绘制时间线
+        self.draw_timeline(self.screen)
+
+        # 调整地图区域（考虑顶部信息栏和时间线）
+        adjusted_map_rect = pygame.Rect(
+            0,
+            self.header_height + 60,
+            int(self.width * 0.65),
+            self.height - self.header_height - 60 - 60
+        )
+        old_map_rect = self.map_rect
+        self.map_rect = adjusted_map_rect
+
         # 绘制地图
         self.draw_map(self.screen)
+
+        # 恢复原始map_rect
+        self.map_rect = old_map_rect
+
+        # 绘制事件通知
+        self.draw_event_notifications(self.screen)
 
         # 绘制信息面板
         self.draw_panel(self.screen, selected_agent_id)
