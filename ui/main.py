@@ -101,6 +101,7 @@ class SimulationController:
 
         # 模拟数据
         self.agents: Dict[str, BaseAgent] = {}
+        self.name_to_id: Dict[str, str] = {}  # 名字到ID的快速映射
         self.world: Optional[World] = None
         self.custom_agents: List[Dict] = []  # 用户创建的智能体
 
@@ -341,9 +342,11 @@ class SimulationController:
 
         # 恢复智能体
         self.agents.clear()
+        self.name_to_id.clear()
         for agent_id, agent_data in agents_data.items():
             agent = BaseAgent.from_dict(agent_data)
             self.agents[agent_id] = agent
+            self.name_to_id[agent.name] = agent_id
             if self.world:
                 location = agent_data.get("position", "未知")
                 self.world.add_agent(agent_id, agent)
@@ -532,6 +535,7 @@ class SimulationController:
             location = None
 
         self.agents[agent_id] = agent
+        self.name_to_id[agent.name] = agent_id
         return agent, location
 
     def _create_agent_from_data(self, agent_data: dict):
@@ -569,6 +573,7 @@ class SimulationController:
             location = None
 
         self.agents[agent_id] = agent
+        self.name_to_id[agent.name] = agent_id
         return agent, location
 
     def _update_scenario_view(self):
@@ -623,11 +628,10 @@ class SimulationController:
                     speaker_name = line.get("speaker", "")
                     content = line.get("content", "")
 
-                    # 找到对应的agent_id
-                    for agent_id, agent in self.agents.items():
-                        if agent.name == speaker_name:
-                            self.scenario_view.show_dialog(agent_id, content, duration=3.0)
-                            break
+                    # 使用name_to_id快速查找
+                    agent_id = self.name_to_id.get(speaker_name)
+                    if agent_id and agent_id in self.agents:
+                        self.scenario_view.show_dialog(agent_id, content, duration=3.0)
 
             # 更新记忆统计
             self._sync_agent_memory_counts()

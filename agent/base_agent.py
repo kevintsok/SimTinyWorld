@@ -1225,6 +1225,21 @@ class BaseAgent(SimBaseAgent):
             print(f"为{self.name}生成财富数据时出错: {e}")
             return self._generate_default_wealth()
     
+    @staticmethod
+    def _derive_status_from_activity(activity: str) -> str:
+        """根据活动内容推导状态字符串"""
+        activity_lower = activity.lower()
+        if "工作" in activity_lower or "学习" in activity_lower:
+            return "工作中"
+        elif "吃" in activity_lower or "喝" in activity_lower or "餐" in activity_lower:
+            return "用餐中"
+        elif "休息" in activity_lower or "放松" in activity_lower:
+            return "放松中"
+        elif "聊天" in activity_lower or "交流" in activity_lower or "讨论" in activity_lower:
+            return "社交中"
+        else:
+            return "活动中"
+
     def _generate_default_wealth(self) -> Dict[str, float]:
         """生成默认的财富数据，当LLM生成失败时使用"""
         # 基于职业和年龄设置默认金钱财富
@@ -1323,18 +1338,8 @@ class BaseAgent(SimBaseAgent):
                 
                 # 如果没有状态，根据活动生成一个
                 if "status" not in item or not item["status"]:
-                    activity = item["activity"].lower()
-                    if "工作" in activity or "学习" in activity:
-                        item["status"] = "工作中"
-                    elif "吃" in activity or "喝" in activity or "餐" in activity:
-                        item["status"] = "用餐中"
-                    elif "休息" in activity or "放松" in activity:
-                        item["status"] = "放松中"
-                    elif "聊天" in activity or "交流" in activity or "讨论" in activity:
-                        item["status"] = "社交中"
-                    else:
-                        item["status"] = "活动中"
-                        
+                    item["status"] = self._derive_status_from_activity(item["activity"])
+
                 cleaned_plan.append(item)
                 total_duration += item["duration"]
             
@@ -1749,18 +1754,8 @@ class BaseAgent(SimBaseAgent):
                     
                     # 如果没有状态，根据活动生成一个
                     if "status" not in item or not item["status"]:
-                        activity = item["activity"].lower()
-                        if "工作" in activity or "学习" in activity:
-                            item["status"] = "工作中"
-                        elif "吃" in activity or "喝" in activity or "餐" in activity:
-                            item["status"] = "用餐中"
-                        elif "休息" in activity or "放松" in activity:
-                            item["status"] = "放松中"
-                        elif "聊天" in activity or "交流" in activity or "讨论" in activity:
-                            item["status"] = "社交中"
-                        else:
-                            item["status"] = "活动中"
-                            
+                        item["status"] = self._derive_status_from_activity(item["activity"])
+
                     cleaned_plan.append(item)
                     total_duration += item["duration"]
                 

@@ -15,11 +15,6 @@ from typing import Dict, List, Optional, Any
 from simulation.scenarios.base import BaseScenario
 
 
-# 线程锁字典（保持与simulate.py兼容）
-agent_locks = {}
-global_lock = threading.Lock()
-
-
 class DailyLifeScenario(BaseScenario):
     """日常生活场景
 
@@ -42,10 +37,9 @@ class DailyLifeScenario(BaseScenario):
         self.available_locations = []
         self.location_descriptions = {}
 
-        # 初始化锁字典
-        global agent_locks, global_lock
-        agent_locks = {}
-        global_lock = threading.Lock()
+        # 初始化锁字典（改为实例变量，避免多实例共享）
+        self.agent_locks = {}
+        self.global_lock = threading.Lock()
 
         # 快速测试模式的预设回复
         self._mock_responses = [
@@ -78,9 +72,19 @@ class DailyLifeScenario(BaseScenario):
             agent: 智能体实例
         """
         # 确保智能体有锁
-        with global_lock:
-            if agent.id not in agent_locks:
-                agent_locks[agent.id] = threading.Lock()
+        with self.global_lock:
+            if agent.id not in self.agent_locks:
+                self.agent_locks[agent.id] = threading.Lock()
+
+    def _get_agent_location(self, agent_id: str, environment: Any) -> Optional[str]:
+        """获取智能体当前位置的辅助方法"""
+        if hasattr(environment, "get_agent_location"):
+            return environment.get_agent_location(agent_id)
+        if hasattr(environment, "locations"):
+            for loc_name, loc in environment.locations.items():
+                if agent_id in getattr(loc, "current_agents", set()):
+                    return loc_name
+        return None
 
     def get_prompt_for_agent(self, agent, context: Dict[str, Any]) -> str:
         """获取智能体的提示词
@@ -247,14 +251,7 @@ class DailyLifeScenario(BaseScenario):
 
                 if next_location:
                     # 获取当前位置
-                    current_location = None
-                    if hasattr(environment, "get_agent_location"):
-                        current_location = environment.get_agent_location(agent.id)
-                    elif hasattr(environment, "locations"):
-                        for loc_name, loc in environment.locations.items():
-                            if agent.id in getattr(loc, "current_agents", set()):
-                                current_location = loc_name
-                                break
+                    current_location = self._get_agent_location(agent.id, environment)
 
                     # 如果位置不同，移动智能体
                     if current_location and next_location != current_location:
@@ -339,9 +336,9 @@ class DailyLifeScenario(BaseScenario):
 
         # 确保有锁
         for agent in participating_agents:
-            with global_lock:
-                if agent.id not in agent_locks:
-                    agent_locks[agent.id] = threading.Lock()
+            with self.global_lock:
+                if agent.id not in self.agent_locks:
+                    self.agent_locks[agent.id] = threading.Lock()
 
         # 只有一个智能体，记录独处
         if len(participating_agents) < 2:
@@ -349,7 +346,7 @@ class DailyLifeScenario(BaseScenario):
                 solo_agent = participating_agents[0]
                 thought = f"我在{location}，周围没有其他人，感到{solo_agent.mood.get('description', '平静')}。"
 
-                with agent_locks.get(solo_agent.id, global_lock):
+                with self.agent_locks.get(solo_agent.id, self.global_lock):
                     solo_agent.add_memory(thought)
 
                 return
@@ -420,14 +417,14 @@ class DailyLifeScenario(BaseScenario):
 
             # 记忆
             memory_text = f"在{location}，我对大家说：'{response}'"
-            with agent_locks.get(next_speaker.id, global_lock):
+            with self.agent_locks.get(next_speaker.id, self.global_lock):
                 next_speaker.add_memory(memory_text)
 
             # 其他人听到对话
             for agent in agents:
                 if agent.id != next_speaker.id:
                     hearing_memory = f'在{location}，{next_speaker.name}说："{response}"'
-                    with agent_locks.get(agent.id, global_lock):
+                    with self.agent_locks.get(agent.id, self.global_lock):
                         agent.add_memory(hearing_memory)
 
             # 更新心情
@@ -606,7 +603,7 @@ class DailyLifeScenario(BaseScenario):
                 # 快速测试模式：根据对话阶段选择回复类型
                 return self._get_mock_response(conversation_history)
             else:
-                with agent_locks.get(speaker.id, global_lock):
+                with self.agent_locks.get(speaker.id, self.global_lock):
                     history = conversation_history[-4:] if conversation_history else []
                     if hasattr(speaker, 'think'):
                         return speaker.think(query, history=history)
@@ -673,7 +670,7 @@ class DailyLifeScenario(BaseScenario):
         """
         response_lower = response.lower()
 
-        with agent_locks.get(agent.id, global_lock):
+        with self.agent_locks.get(agent.id, self.global_lock):
             if any(word in response_lower for word in ["高兴", "开心", "愉快", "喜欢"]):
                 agent.update_mood('positive', 0.15, f"在{location}进行愉快的对话")
             elif any(word in response_lower for word in ["烦", "讨厌", "生气", "不满"]):
@@ -711,12 +708,7 @@ class DailyLifeScenario(BaseScenario):
                 continue
 
             # 构建评估提示
-            current_location = ""
-            if environment and hasattr(environment, "locations"):
-                for loc_name, loc in environment.locations.items():
-                    if agent.id in getattr(loc, "current_agents", set()):
-                        current_location = loc_name
-                        break
+            current_location = self._get_agent_location(agent.id, environment) or ""
 
             prompt = f"""评估智能体 {agent.name} 的财富变化。
 
@@ -819,8 +811,7 @@ class DailyLifeScenario(BaseScenario):
         scenario.data = data.get("data", {})
 
         # 不序列化锁，恢复时重建
-        global agent_locks, global_lock
-        agent_locks = {}
-        global_lock = threading.Lock()
+        scenario.agent_locks = {}
+        scenario.global_lock = threading.Lock()
 
         return scenario
