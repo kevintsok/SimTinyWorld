@@ -24,10 +24,8 @@ class OpenAIEngine(BaseLLMEngine):
         elif not isinstance(self.embedding_model, str):
             self.embedding_model = "text-embedding-ada-002"
         
-        # 从环境变量获取API密钥
         api_key = kwargs.get("api_key", os.getenv("OPENAI_API_KEY"))
-        
-        # 如果环境变量中没有，尝试从配置管理器获取
+
         if not api_key:
             try:
                 from llm_engine.config.config_manager import ConfigManager
@@ -36,17 +34,14 @@ class OpenAIEngine(BaseLLMEngine):
             except Exception as e:
                 print(f"从配置管理器获取API密钥失败: {e}")
         
-        # 检查API密钥是否为占位符或无效格式
         if not api_key or api_key.startswith("YOUR_") or len(api_key) < 10:
             print("警告: OPENAI API密钥无效或为占位符，LLM将以模拟模式运行")
             self.mock_mode = True
             self.client = None
             return
         
-        # 创建OpenAI客户端
         try:
             self.client = openai.OpenAI(api_key=api_key)
-            # 进行简单测试以验证API密钥有效性
             self._test_api_key()
         except Exception as e:
             print(f"初始化OpenAI客户端失败，将使用模拟模式: {e}")
@@ -56,8 +51,7 @@ class OpenAIEngine(BaseLLMEngine):
     def _test_api_key(self):
         """测试API密钥有效性"""
         try:
-            # 尝试一个最小的API调用来验证密钥
-            response = self.client.chat.completions.create(
+            self.client.chat.completions.create(
                 model=self.model_name,
                 messages=[
                     {"role": "system", "content": "Hello"},
@@ -65,9 +59,8 @@ class OpenAIEngine(BaseLLMEngine):
                 ],
                 max_tokens=5,
                 temperature=0,
-                timeout=5  # 设置较短的超时时间
+                timeout=5
             )
-            # 如果没有异常则表示API密钥有效
         except Exception as e:
             print(f"API密钥验证失败: {e}")
             self.mock_mode = True

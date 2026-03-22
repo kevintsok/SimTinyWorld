@@ -19,10 +19,8 @@ class QwenEngine(BaseLLMEngine):
             print(f"已启用模拟模式，将使用模拟回复")
             return
         
-        # 优先从参数获取API密钥，其次从环境变量
         self.api_key = kwargs.get("api_key", os.getenv("DASHSCOPE_API_KEY"))
-        
-        # 如果以上方式都没有获得API密钥，尝试从配置管理器获取
+
         if not self.api_key:
             try:
                 from llm_engine.config.config_manager import ConfigManager
@@ -31,24 +29,20 @@ class QwenEngine(BaseLLMEngine):
             except Exception as e:
                 print(f"从配置管理器获取API密钥失败: {e}")
         
-        # 检查API密钥是否为占位符或无效格式
         if not self.api_key or self.api_key.startswith("YOUR_") or len(self.api_key) < 10:
             print("警告: QWEN API密钥无效或为占位符，LLM将以模拟模式运行")
             self.mock_mode = True
             self.client = None
             return
         
-        # 从配置获取基础URL
-        base_url = self.models_config.get("qwen", {}).get("base_url", 
+        base_url = self.models_config.get("qwen", {}).get("base_url",
                  "https://dashscope.aliyuncs.com/compatible-mode/v1")
-        
-        # 初始化OpenAI客户端
+
         try:
             self.client = OpenAI(
                 api_key=self.api_key,
                 base_url=base_url
             )
-            # 进行简单测试以验证API密钥有效性
             self._test_api_key()
         except Exception as e:
             print(f"初始化Qwen客户端失败，将使用模拟模式: {e}")
@@ -58,8 +52,7 @@ class QwenEngine(BaseLLMEngine):
     def _test_api_key(self):
         """测试API密钥有效性"""
         try:
-            # 尝试一个最小的API调用来验证密钥
-            response = self.client.chat.completions.create(
+            self.client.chat.completions.create(
                 model=self.model_name,
                 messages=[
                     {"role": "system", "content": "Hello"},
@@ -67,9 +60,8 @@ class QwenEngine(BaseLLMEngine):
                 ],
                 max_tokens=5,
                 temperature=0,
-                timeout=5  # 设置较短的超时时间
+                timeout=5
             )
-            # 如果没有异常则表示API密钥有效
         except Exception as e:
             print(f"API密钥验证失败: {e}")
             self.mock_mode = True
