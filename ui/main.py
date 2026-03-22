@@ -3,6 +3,7 @@ UI Main Entry Point - UI主入口
 
 启动游戏风格可视化界面。
 使用新的模块化UI：MainView（主界面）和 ScenarioView（场景视图）。
+支持多Session管理。
 """
 
 import pygame
@@ -18,16 +19,18 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from ui.main_view import MainView, MainViewInterface
 from ui.scenario_view import ScenarioView, ScenarioViewInterface
+from ui.session_panel import SessionPanel, SessionPanelInterface
 from environment.world import World
 from environment.layout import EnvironmentLayout
 from agent.base_agent import BaseAgent
+from session import SessionManager
 
 
 class SimulationController:
     """模拟UI主控制器
 
     集成MainView（主界面）和ScenarioView（场景视图），
-    管理两者之间的切换和数据流动。
+    管理两者之间的切换和数据流动。支持多Session管理。
     """
 
     def __init__(self, width: int = 1000, height: int = 700, fast_mode: bool = False):
@@ -47,12 +50,18 @@ class SimulationController:
         self.screen = pygame.display.set_mode((width, height))
         pygame.display.set_caption("多智能体社会模拟")
 
+        # Session管理器
+        self.session_manager = SessionManager()
+        self.current_session_id: Optional[str] = None
+        self.current_session_name: str = "未命名Session"
+
         # 创建主视图（带回调接口）
         main_interface = MainViewInterface(
             on_scenario_selected=self._on_scenario_selected,
             on_agent_created=self._on_agent_created,
             on_agent_imported=self._on_agent_imported,
-            on_quick_start=self._on_quick_start
+            on_quick_start=self._on_quick_start,
+            on_session_clicked=self._on_session_clicked
         )
         self.main_view = MainView(self.screen, pygame.Rect(0, 0, width, height), main_interface)
 
@@ -61,9 +70,27 @@ class SimulationController:
             on_agent_selected=self._on_agent_selected,
             on_agent_detail_toggle=self._on_agent_detail_toggle,
             on_return_to_menu=self._on_return_to_menu,
-            on_simulation_control=self._on_simulation_control
+            on_simulation_control=self._on_simulation_control,
+            on_save_session=self._on_save_session_in_scenario,
+            on_load_session=self._on_load_session_in_scenario
         )
         self.scenario_view = ScenarioView(width, height, scenario_interface, self.screen)
+
+        # 创建Session面板（带回调接口）
+        session_interface = SessionPanelInterface(
+            on_continue_session=self._on_continue_session,
+            on_save_session=self._on_save_session,
+            on_delete_session=self._on_delete_session,
+            on_new_session=self._on_new_session,
+            on_load_session=self._on_load_session
+        )
+        self.session_panel = SessionPanel(
+            self.screen,
+            pygame.Rect(width // 4, height // 6, width // 2, height // 2),
+            self.session_manager,
+            session_interface
+        )
+        self.session_panel.visible = False
 
         # 状态
         self.current_view = "main"  # main, scenario
@@ -89,6 +116,9 @@ class SimulationController:
         self.current_interact_round = 0
         self.total_dialogue_count = 0  # 累计对话次数（每个智能体参与一次对话计1）
 
+        # 当前场景类型
+        self.scenario_type = "daily_life"
+
     # ==================== 回调处理 ====================
 
     def _on_scenario_selected(self, scenario_id: str, config: dict):
@@ -108,6 +138,45 @@ class SimulationController:
         """快速开始"""
         self._start_simulation(config)
 
+    def _on_session_clicked(self):
+        """Session按钮点击"""
+        self.session_panel.refresh_sessions()
+        self.session_panel.visible = True
+
+    def _on_continue_session(self, session_id: str):
+        """继续选中的Session"""
+        self.session_panel.visible = False
+        self._load_session(session_id)
+
+    def _on_save_session(self, session_id: str):
+        """保存Session"""
+        self._save_current_session(session_id)
+
+    def _on_delete_session(self, session_id: str):
+        """删除Session"""
+        if self.session_manager.delete_session(session_id):
+            print(f"Session {session_id} 已删除")
+            self.session_panel.refresh_sessions()
+            if self.selected_agent_id == session_id:
+                self.selected_agent_id = None
+
+    def _on_new_session(self, name: str):
+        """创建新Session"""
+        session_id = self.session_manager.create_session(
+            name=name,
+            description="",
+            scenario_type=self.scenario_type
+        )
+        self.current_session_id = session_id
+        self.current_session_name = name
+        self.session_panel.refresh_sessions()
+        print(f"创建新Session: {name} ({session_id})")
+
+    def _on_load_session(self, session_id: str):
+        """加载Session"""
+        self.session_panel.visible = False
+        self._load_session(session_id)
+
     def _on_agent_selected(self, agent_id: str):
         """智能体被选中"""
         self.selected_agent_id = agent_id
@@ -116,6 +185,156 @@ class SimulationController:
     def _on_agent_detail_toggle(self, visible: bool):
         """详情显示状态变化"""
         print(f"详情显示: {visible}")
+
+    # ==================== Session管理 ====================
+
+    def to_dict(self) -> Dict[str, Any]:
+        """将UI状态序列化为字典
+
+        Returns:
+            Dict: 包含UI状态的字典
+        """
+        return {
+            "current_view": self.current_view,
+            "current_day": self.current_day,
+            "interact_rounds_per_day": self.interact_rounds_per_day,
+            "current_interact_round": self.current_interact_round,
+            "total_dialogue_count": self.total_dialogue_count,
+            "is_paused": self.is_paused,
+            "speed": self.speed,
+            "selected_agent_id": self.selected_agent_id,
+            "custom_agents": self.custom_agents,
+            "scenario_type": self.scenario_type,
+            "current_session_id": self.current_session_id,
+            "current_session_name": self.current_session_name,
+        }
+
+    def from_dict(self, data: Dict[str, Any]):
+        """从字典恢复UI状态
+
+        Args:
+            data: 包含UI状态的字典
+        """
+        self.current_view = data.get("current_view", "main")
+        self.current_day = data.get("current_day", 1)
+        self.interact_rounds_per_day = data.get("interact_rounds_per_day", 5)
+        self.current_interact_round = data.get("current_interact_round", 0)
+        self.total_dialogue_count = data.get("total_dialogue_count", 0)
+        self.is_paused = data.get("is_paused", True)
+        self.speed = data.get("speed", 1.0)
+        self.selected_agent_id = data.get("selected_agent_id")
+        self.custom_agents = data.get("custom_agents", [])
+        self.scenario_type = data.get("scenario_type", "daily_life")
+        self.current_session_id = data.get("current_session_id")
+        self.current_session_name = data.get("current_session_name", "未命名Session")
+
+    def save_current_session(self) -> bool:
+        """保存当前Session（供外部调用）
+
+        Returns:
+            bool: 是否保存成功
+        """
+        if not self.current_session_id:
+            # 如果没有当前session，创建一个
+            self.current_session_id = self.session_manager.create_session(
+                name=self.current_session_name,
+                description="",
+                scenario_type=self.scenario_type
+            )
+
+        return self._save_current_session(self.current_session_id)
+
+    def _save_current_session(self, session_id: str) -> bool:
+        """保存指定Session
+
+        Args:
+            session_id: Session ID
+
+        Returns:
+            bool: 是否保存成功
+        """
+        # 获取各组件状态
+        engine_state = {}  # TODO: 集成SimulationEngine时填充
+        world_state = self.world.to_dict() if self.world else {}
+        scenario_state = self.scenario_view.to_dict()
+        controller_state = self.to_dict()
+
+        # 获取智能体数据
+        agents_data = {}
+        for agent_id, agent in self.agents.items():
+            agents_data[agent_id] = agent.to_dict()
+
+        success = self.session_manager.save_session(
+            session_id=session_id,
+            engine_state=engine_state,
+            world_state=world_state,
+            scenario_state=scenario_state,
+            controller_state=controller_state,
+            agents_data=agents_data
+        )
+
+        if success:
+            print(f"Session {session_id} 已保存")
+        else:
+            print(f"Session {session_id} 保存失败")
+
+        return success
+
+    def _load_session(self, session_id: str):
+        """加载并恢复Session
+
+        Args:
+            session_id: Session ID
+        """
+        session_data = self.session_manager.load_session(session_id)
+        if not session_data:
+            print(f"无法加载Session {session_id}")
+            return
+
+        metadata = session_data.get("metadata")
+        state = session_data.get("state", {})
+        agents_data = session_data.get("agents", {})
+
+        if not state:
+            print(f"Session {session_id} 无有效状态数据")
+            return
+
+        # 恢复元数据
+        if metadata:
+            self.current_session_id = metadata.session_id
+            self.current_session_name = metadata.name
+            self.scenario_type = metadata.scenario_type
+
+        # 恢复控制器状态
+        controller_state = state.get("controller", {})
+        self.from_dict(controller_state)
+
+        # 恢复世界状态
+        world_state = state.get("world", {})
+        if world_state:
+            self.world = World.from_dict(world_state)
+
+        # 恢复场景视图状态
+        scenario_state = state.get("scenario", {})
+        self.scenario_view.from_dict(scenario_state)
+
+        # 恢复智能体
+        self.agents.clear()
+        for agent_id, agent_data in agents_data.items():
+            agent = BaseAgent.from_dict(agent_data)
+            self.agents[agent_id] = agent
+            if self.world:
+                location = agent_data.get("position", "未知")
+                self.world.add_agent(agent_id, agent)
+
+        # 更新场景视图
+        self._update_scenario_view()
+
+        # 切换到场景视图
+        self.current_view = "scenario"
+        pygame.display.set_caption(f"多智能体社会模拟 - {self.current_session_name}")
+
+    # ==================== 原有回调 ====================
 
     def _on_return_to_menu(self):
         """返回主菜单"""
@@ -132,9 +351,31 @@ class SimulationController:
         elif control_type == "step":
             self._simulate_step()
 
+    def _on_save_session_in_scenario(self):
+        """在仿真场景中保存Session"""
+        if self.current_session_id:
+            self._save_current_session(self.current_session_id)
+        else:
+            # 如果没有session_id，创建一个新session
+            session_id = self.session_manager.create_session(
+                f"Session_{self.current_day}",
+                f"第{self.current_day}天自动保存",
+                self.scenario_type or "daily_life"
+            )
+            self.current_session_id = session_id
+            self._save_current_session(session_id)
+
+    def _on_load_session_in_scenario(self):
+        """在仿真场景中加载Session - 显示Session面板"""
+        self.session_panel.visible = True
+        self.session_panel.refresh_sessions()
+
     def _start_simulation(self, config: dict):
         """开始模拟"""
         self.current_view = "scenario"
+
+        # 设置场景类型
+        self.scenario_type = config.get("scenario_type", "daily_life")
 
         # 初始化世界
         location_count = config.get("locations", 5)
@@ -315,6 +556,7 @@ class SimulationController:
                     mbti=agent.mbti,
                     location=location,
                     mood_value=agent.mood.get("value", 0.0),
+                    wealth=agent.wealth,
                     long_term_memory_count=long_term_count,
                     short_term_memory_count=short_term_count,
                     short_term_memories=short_term_memories[-10:],  # 最近10条短期记忆
@@ -453,15 +695,37 @@ class SimulationController:
                         running = False
                     elif event.type == pygame.KEYDOWN:
                         if event.key == pygame.K_ESCAPE:
-                            running = False
+                            if self.session_panel.visible:
+                                self.session_panel.visible = False
+                            else:
+                                running = False
+                        # Ctrl+S 保存快捷键
+                        elif event.key == pygame.K_s and pygame.key.get_mods() & pygame.KMOD_CTRL:
+                            self.save_current_session()
                         # 传递键盘事件给主视图（用于TextBox输入）
                         self.main_view.handle_event(event)
                     else:
                         self.main_view.handle_event(event)
 
+                    # 处理Session面板事件
+                    if self.session_panel.visible:
+                        result = self.session_panel.handle_event(event)
+                        if result == "close":
+                            self.session_panel.visible = False
+                        # select_session 只更新选中状态，不触发加载
+
                 # 绘制主视图
                 self.screen.fill((30, 33, 40))  # 背景色
                 self.main_view.draw(self.screen)
+
+                # 绘制Session面板（如果可见）
+                if self.session_panel.visible:
+                    # 半透明遮罩
+                    overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+                    overlay.fill((0, 0, 0, 128))
+                    self.screen.blit(overlay, (0, 0))
+                    self.session_panel.draw(self.screen)
+
                 pygame.display.flip()
 
             elif self.current_view == "scenario":
@@ -471,8 +735,11 @@ class SimulationController:
                         running = False
                     elif event.type == pygame.KEYDOWN:
                         if event.key == pygame.K_ESCAPE:
-                            self.current_view = "main"
-                            pygame.display.set_caption("多智能体社会模拟")
+                            if self.session_panel.visible:
+                                self.session_panel.visible = False
+                            else:
+                                self.current_view = "main"
+                                pygame.display.set_caption("多智能体社会模拟")
                         elif event.key == pygame.K_SPACE:
                             self.is_paused = not self.is_paused
                         elif event.key == pygame.K_1:
@@ -482,10 +749,23 @@ class SimulationController:
                         elif event.key == pygame.K_3:
                             self.speed = 4.0
                         elif event.key == pygame.K_s:
-                            self._simulate_step()
+                            if pygame.key.get_mods() & pygame.KMOD_CTRL:
+                                # Ctrl+S 保存
+                                self.save_current_session()
+                            else:
+                                self._simulate_step()
                     else:
                         action = self.scenario_view.handle_event(event)
                         self._handle_action(action)
+
+                    # 处理Session面板事件
+                    if self.session_panel.visible:
+                        result = self.session_panel.handle_event(event)
+                        if result == "close":
+                            self.session_panel.visible = False
+                        elif result and result.startswith("select_session:"):
+                            session_id = result.split(":")[1]
+                            self._on_load_session(session_id)
 
                 # 自动步进
                 if not self.is_paused:
@@ -502,6 +782,13 @@ class SimulationController:
                     is_paused=self.is_paused,
                     speed=self.speed
                 )
+
+                # 绘制Session面板（如果可见）
+                if self.session_panel.visible:
+                    overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+                    overlay.fill((0, 0, 0, 128))
+                    self.screen.blit(overlay, (0, 0))
+                    self.session_panel.draw(self.screen)
 
             self.clock.tick(60)
 

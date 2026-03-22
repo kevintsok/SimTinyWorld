@@ -707,12 +707,27 @@ class BaseAgent(SimBaseAgent):
             "plan_index": self.plan_index,
             "wealth": self.wealth,
             "mood": self.mood,
-            "vector_store_dir": self.vector_store_dir
+            "vector_store_dir": self.vector_store_dir,
+            # 新增字段
+            "short_term_memory": getattr(self, "short_term_memory", []),
+            "long_term_memory": getattr(self, "long_term_memory", []),
+            "daily_plan": getattr(self, "daily_plan", None),
+            "current_plan_index": getattr(self, "current_plan_index", 0),
+            "position": getattr(self, "position", None),
+            "ultimate_goal": getattr(self, "ultimate_goal", "繁衍")
         }
 
     @classmethod
     def from_dict(cls, data, engine=None):
-        """从字典创建智能体实例"""
+        """从字典创建智能体实例
+
+        Args:
+            data: 字典数据
+            engine: LLM引擎（可选）
+
+        Returns:
+            BaseAgent: 恢复的智能体实例
+        """
         # 先创建一个带有基本属性的实例
         agent = cls(
             id=data.get("id"),
@@ -725,7 +740,7 @@ class BaseAgent(SimBaseAgent):
             vector_store_dir=data.get("vector_store_dir"),
             engine=engine
         )
-        
+
         # 单独处理财富，确保在背景和属性设置后生成财富
         if "wealth" in data and data["wealth"]:
             agent.wealth = data["wealth"]
@@ -740,17 +755,46 @@ class BaseAgent(SimBaseAgent):
             except Exception as e:
                 print(f"从字典生成{agent.name}财富时出错: {e}，使用随机默认财富")
                 agent.wealth = agent._generate_default_wealth()
-                
+
         agent.status = data.get("status", "空闲")
         agent.current_plan = data.get("current_plan")
         agent.plan_index = data.get("plan_index", 0)
-        
+
         # 恢复心情，如果字典中没有心情数据，则生成一个新的
         if "mood" in data:
             agent.mood = data["mood"]
         else:
             agent.mood = agent._generate_initial_mood()
-        
+
+        # 恢复新增字段
+        agent.ultimate_goal = data.get("ultimate_goal", "繁衍")
+        agent.position = data.get("position")
+
+        # 恢复每日计划
+        if "daily_plan" in data:
+            agent.daily_plan = data["daily_plan"]
+        if "current_plan_index" in data:
+            agent.current_plan_index = data["current_plan_index"]
+
+        # 恢复记忆并重建FAISS
+        if "short_term_memory" in data:
+            agent.short_term_memory = data["short_term_memory"]
+            # 写入短期记忆文件
+            if hasattr(agent, "shortterm_file") and agent.short_term_memory:
+                with open(agent.shortterm_file, "w", encoding="utf-8") as f:
+                    f.write("\n".join(agent.short_term_memory))
+
+        if "long_term_memory" in data:
+            agent.long_term_memory = data["long_term_memory"]
+            # 写入长期记忆文件
+            if hasattr(agent, "longterm_file") and agent.long_term_memory:
+                with open(agent.longterm_file, "w", encoding="utf-8") as f:
+                    f.write("\n".join(agent.long_term_memory))
+
+        # 重建FAISS索引
+        if hasattr(agent, "_update_vector_store"):
+            agent._update_vector_store()
+
         return agent
 
     # ===== 继承自 SimBaseAgent 的抽象方法实现 =====

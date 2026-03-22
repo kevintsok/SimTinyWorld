@@ -389,8 +389,101 @@ class World(BaseEnvironment):
 
     def get_all_locations(self) -> List[str]:
         """获取所有位置名称
-        
+
         Returns:
             List[str]: 所有位置名称的列表
         """
-        return list(self.locations.keys()) 
+        return list(self.locations.keys())
+
+    # ===== 序列化支持 =====
+
+    def to_dict(self) -> Dict[str, Any]:
+        """将世界转换为字典表示
+
+        Returns:
+            Dict[str, Any]: 世界状态字典
+        """
+        return {
+            "visual_mode": self.visual_mode,
+            "locations": {
+                name: {
+                    "type": loc.type,
+                    "description": loc.description,
+                    "connected_locations": list(loc.connected_locations),
+                    "current_agents": list(loc.current_agents)
+                }
+                for name, loc in self.locations.items()
+            },
+            "layout_positions": getattr(self.layout, "positions", {}),
+            "time": self.time,
+            "time_scale": self.time_scale,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any], visual_mode: bool = False) -> "World":
+        """从字典创建世界实例
+
+        Args:
+            data: 世界状态字典
+            visual_mode: 是否启用可视化模式
+
+        Returns:
+            World: 恢复的世界实例
+        """
+        # 获取位置数据
+        locations_data = data.get("locations", {})
+
+        # 计算位置数量
+        location_count = len(locations_data)
+
+        # 创建新的World实例（不依赖单例）
+        world = cls.__new__(cls)
+
+        # 调用父类初始化
+        from simulation.base import BaseEnvironment
+        BaseEnvironment.__init__(world, {})
+
+        # 设置单例实例（保持向后兼容）
+        cls._instance = world
+
+        # 设置可视化模式
+        world.visual_mode = visual_mode
+
+        # 恢复布局位置
+        layout_positions = data.get("layout_positions", {})
+        if layout_positions:
+            from environment.layout import EnvironmentLayout
+            world.layout = EnvironmentLayout(location_count=len(locations_data))
+            world.layout.positions = layout_positions
+
+        # 恢复位置
+        world.locations = {}
+        for name, loc_data in locations_data.items():
+            location = Location(
+                name=name,
+                type=loc_data.get("type", "场所"),
+                description=loc_data.get("description", ""),
+                connected_locations=loc_data.get("connected_locations", [])
+            )
+            # 恢复位置上的智能体
+            location.current_agents = set(loc_data.get("current_agents", []))
+            world.locations[name] = location
+
+        # 恢复时间状态
+        world.time = data.get("time", 0)
+        world.time_scale = data.get("time_scale", 1.0)
+
+        # 恢复智能体缓存（从location中的current_agents重建）
+        world.agents = {}
+        for loc in world.locations.values():
+            for agent_id in loc.current_agents:
+                world.agents[agent_id] = None  # 智能体对象需要单独恢复
+
+        # 初始化可视化器相关
+        world.visualizer = None
+        world.is_visualizer_active = False
+
+        if visual_mode:
+            world._init_visualizer()
+
+        return world 

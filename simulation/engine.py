@@ -254,3 +254,57 @@ class SimulationEngine:
             "agent_count": len(self.agents),
             "scenario_complete": self.scenario.is_complete() if self.scenario else False
         }
+
+    # ===== 序列化支持 =====
+
+    def to_dict(self) -> Dict[str, Any]:
+        """将引擎转换为字典表示
+
+        Returns:
+            Dict[str, Any]: 引擎状态字典
+        """
+        return {
+            "current_step": self.current_step,
+            "total_steps": self.total_steps,
+            "config": self.config,
+            "is_running": self.is_running
+        }
+
+    @classmethod
+    def from_dict(
+        cls,
+        data: Dict[str, Any],
+        scenario: BaseScenario,
+        environment: BaseEnvironment = None
+    ) -> "SimulationEngine":
+        """从字典创建引擎实例
+
+        Args:
+            data: 引擎状态字典
+            scenario: 场景实例
+            environment: 环境实例（可选）
+
+        Returns:
+            SimulationEngine: 恢复的引擎实例
+        """
+        # 创建引擎实例
+        engine = cls(
+            scenario=scenario,
+            environment=environment,
+            config=data.get("config", {})
+        )
+
+        # 恢复步数状态
+        engine.current_step = data.get("current_step", 0)
+        engine.total_steps = data.get("total_steps", 0)
+        engine.is_running = data.get("is_running", False)
+
+        # 重建锁（不序列化锁）
+        engine.lock = threading.Lock()
+
+        # 恢复回调（不序列化回调，需要重新绑定）
+        engine.on_step_start = None
+        engine.on_step_end = None
+        engine.on_simulation_end = None
+
+        return engine

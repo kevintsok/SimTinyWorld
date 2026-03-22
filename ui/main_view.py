@@ -22,6 +22,7 @@ class MainViewInterface:
     on_agent_created: Callable[[dict], None] = None
     on_agent_imported: Callable[[dict], None] = None
     on_quick_start: Callable[[dict], None] = None
+    on_session_clicked: Callable[[], None] = None
 
 
 class MainView:
@@ -115,6 +116,16 @@ class MainView:
             hover_color=(100, 180, 120),
         )
 
+        # Session按钮
+        self.session_button = Button(
+            rect=pygame.Rect(left_x, top_y + (button_height + button_margin) * 3,
+                             button_width, button_height),
+            text="Session",
+            callback=self._on_session_clicked,
+            color=(120, 100, 160),
+            hover_color=(140, 120, 180),
+        )
+
         # 右侧面板区域
         panel_x = self.rect.x + 250
         panel_width = self.rect.width - 280
@@ -156,6 +167,7 @@ class MainView:
             "scenario": False,
             "agent": False,
             "quickstart": False,
+            "session": False,
         }
 
     def _init_scenario_panel(self):
@@ -195,7 +207,7 @@ class MainView:
         # 场景参数配置
         config_y = detail_y + 230
         self.scenario_config_panel = Panel(
-            rect=pygame.Rect(panel_x, config_y, panel_width, 150),
+            rect=pygame.Rect(panel_x, config_y, panel_width, 200),
             title="场景配置",
             background_color=(50, 54, 62),
             border_color=self.BORDER_COLOR,
@@ -218,6 +230,22 @@ class MainView:
                             input_width, input_height),
             placeholder="轮次数量 (默认5)",
             max_length=10
+        )
+
+        # 突发事件输入框
+        self.emergency_topic_input = TextBox(
+            rect=pygame.Rect(panel_x + config_label_width, config_y + 130,
+                            input_width, input_height),
+            placeholder="请输入突发事件描述",
+            max_length=100
+        )
+
+        # 观点辩论输入框
+        self.debate_topic_input = TextBox(
+            rect=pygame.Rect(panel_x + config_label_width, config_y + 130,
+                            input_width, input_height),
+            placeholder="请输入辩论观点",
+            max_length=100
         )
 
     def _init_agent_panel(self):
@@ -354,6 +382,15 @@ class MainView:
             self.detail_panel.title = "智能体管理"
         elif selection == "quickstart":
             self.detail_panel.title = "快速开始"
+        elif selection == "session":
+            self.detail_panel.title = "Session管理"
+
+    def _on_session_clicked(self):
+        """Session按钮点击"""
+        self.current_selection = "session"
+        self.detail_panel.title = "Session管理"
+        if self.interface.on_session_clicked:
+            self.interface.on_session_clicked()
 
     def _on_scenario_selected(self, scenario_id: str):
         """场景选项点击处理"""
@@ -390,6 +427,16 @@ class MainView:
         if round_count_text and round_count_text.isdigit():
             config["num_rounds"] = int(round_count_text)
 
+        # 根据场景类型添加额外配置
+        if self.selected_scenario == "emergency":
+            emergency_topic = self.emergency_topic_input.text.strip()
+            if emergency_topic:
+                config["emergency_topic"] = emergency_topic
+        elif self.selected_scenario == "debate":
+            debate_topic = self.debate_topic_input.text.strip()
+            if debate_topic:
+                config["debate_topic"] = debate_topic
+
         return config
 
     def _on_create_agent(self):
@@ -418,6 +465,9 @@ class MainView:
         self.agent_age_input.text = ""
         self.agent_occupation_input.text = ""
         self.agent_background_input.text = ""
+        # 重置下拉框
+        self.agent_gender_dropdown.selected_index = 0
+        self.agent_mbti_dropdown.selected_index = 0
 
         # 调用回调
         if self.interface.on_agent_created:
@@ -471,6 +521,8 @@ class MainView:
             return True
         if self.quickstart_button.handle_event(event):
             return True
+        if self.session_button.handle_event(event):
+            return True
 
         # 根据当前选择处理详情面板事件
         if self.current_selection == "scenario":
@@ -482,6 +534,12 @@ class MainView:
                 return True
             if self.round_count_input.handle_event(event):
                 return True
+            if self.selected_scenario == "emergency":
+                if self.emergency_topic_input.handle_event(event):
+                    return True
+            elif self.selected_scenario == "debate":
+                if self.debate_topic_input.handle_event(event):
+                    return True
 
         elif self.current_selection == "agent":
             # 输入框处理
@@ -555,6 +613,7 @@ class MainView:
             (self.scenario_button, "场景"),
             (self.agent_button, "智能体"),
             (self.quickstart_button, "快速开始"),
+            (self.session_button, "Session"),
         ]
 
         for btn, label in buttons:
@@ -565,7 +624,8 @@ class MainView:
             is_selected = (
                 (label == "场景" and self.current_selection == "scenario") or
                 (label == "智能体" and self.current_selection == "agent") or
-                (label == "快速开始" and self.current_selection == "quickstart")
+                (label == "快速开始" and self.current_selection == "quickstart") or
+                (label == "Session" and self.current_selection == "session")
             )
 
             if is_selected:
@@ -605,15 +665,6 @@ class MainView:
             else:
                 btn.draw(surface)
 
-            # 绘制描述
-            desc = self.AVAILABLE_SCENARIOS[i][2]
-            desc_surface = self.small_font.render(desc, True, (180, 180, 180))
-            desc_rect = desc_surface.get_rect(
-                left=btn.rect.right + 15,
-                centery=btn.rect.centery
-            )
-            surface.blit(desc_surface, desc_rect)
-
         # 绘制场景详情
         if self.scenario_detail_text:
             self.scenario_detail_panel.draw(surface)
@@ -627,17 +678,48 @@ class MainView:
         # 绘制配置输入
         self.scenario_config_panel.draw(surface)
         config_y = self.scenario_config_panel.rect.y + 40
+        input_height = 30
+        label_width = 90  # 标签宽度
+        input_x = self.scenario_config_panel.rect.x + label_width + 10
+        input_width = self.scenario_config_panel.rect.width - label_width - 30
 
         # 智能体数量标签
         label = self.normal_font.render("智能体数量:", True, self.TEXT_COLOR)
-        surface.blit(label, (self.scenario_config_panel.rect.x + 15, config_y + 5))
+        surface.blit(label, (self.scenario_config_panel.rect.x + 10, config_y + 5))
+        self.agent_count_input.rect.x = input_x
+        self.agent_count_input.rect.y = config_y
+        self.agent_count_input.rect.width = input_width
+        self.agent_count_input.rect.height = input_height
         self.agent_count_input.draw(surface)
 
         # 轮次数量标签
         config_y += 40
         label = self.normal_font.render("模拟轮次:", True, self.TEXT_COLOR)
-        surface.blit(label, (self.scenario_config_panel.rect.x + 15, config_y + 5))
+        surface.blit(label, (self.scenario_config_panel.rect.x + 10, config_y + 5))
+        self.round_count_input.rect.x = input_x
+        self.round_count_input.rect.y = config_y
+        self.round_count_input.rect.width = input_width
+        self.round_count_input.rect.height = input_height
         self.round_count_input.draw(surface)
+
+        # 根据场景类型显示额外输入框
+        config_y += 40
+        if self.selected_scenario == "emergency":
+            label = self.normal_font.render("突发事件:", True, self.TEXT_COLOR)
+            surface.blit(label, (self.scenario_config_panel.rect.x + 10, config_y + 5))
+            self.emergency_topic_input.rect.x = input_x
+            self.emergency_topic_input.rect.y = config_y
+            self.emergency_topic_input.rect.width = input_width
+            self.emergency_topic_input.rect.height = input_height
+            self.emergency_topic_input.draw(surface)
+        elif self.selected_scenario == "debate":
+            label = self.normal_font.render("辩论观点:", True, self.TEXT_COLOR)
+            surface.blit(label, (self.scenario_config_panel.rect.x + 10, config_y + 5))
+            self.debate_topic_input.rect.x = input_x
+            self.debate_topic_input.rect.y = config_y
+            self.debate_topic_input.rect.width = input_width
+            self.debate_topic_input.rect.height = input_height
+            self.debate_topic_input.draw(surface)
 
     def _draw_agent_content(self, surface: pygame.Surface):
         """绘制智能体管理内容"""

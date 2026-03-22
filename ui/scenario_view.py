@@ -45,6 +45,8 @@ class ScenarioViewInterface:
     on_agent_detail_toggle: Callable[[bool], None] = None     # 详情显示状态变化
     on_return_to_menu: Callable[[], None] = None              # 返回主菜单
     on_simulation_control: Callable[[str, Any], None] = None   # 模拟控制（暂停/速度等）
+    on_save_session: Callable[[], bool] = None                 # 保存当前Session
+    on_load_session: Callable[[], None] = None                # 加载Session
 
 
 class ScenarioView:
@@ -104,6 +106,8 @@ class ScenarioView:
         self.detail_collapse_offset: float = 0.0  # 折叠动画偏移量 (0.0 = 完全展开, 1.0 = 完全折叠)
         self.detail_collapse_target: float = 0.0  # 折叠动画目标值
         self.detail_collapse_speed: float = 0.15  # 折叠动画速度
+        self.detail_scroll_offset: int = 0  # 详情面板滚动偏移
+        self.detail_content_height: int = 0  # 详情内容总高度（用于计算滚动限制）
 
         # ===== 新增：详情开关按钮区域 =====
         self.detail_toggle_rect: pygame.Rect = None  # 详情开关按钮区域
@@ -137,7 +141,8 @@ class ScenarioView:
             self.height - 45,  # y position in control bar
             80, 30
         )
-        self.interact_rounds_input = TextBox(interact_rounds_rect, "5", max_length=3)
+        self.interact_rounds_input = TextBox(interact_rounds_rect, "", max_length=3)
+        self.interact_rounds_input.text = str(self.interact_rounds)  # 设置初始值
 
     def _on_end_today_clicked(self):
         """结束今天按钮点击处理"""
@@ -258,7 +263,7 @@ class ScenarioView:
             mood_value=mood_value,
             mood_desc=mood_desc,
             status=status,
-            wealth=wealth or {"time": 0, "social": 0, "health": 0.5, "mental": 0.5, "money": 0},
+            wealth=wealth if wealth is not None else {"time": 0, "social": 0, "health": 0.5, "mental": 0.5, "money": 0},
             recent_memories=recent_memories or [],
             personality_traits=personality_traits or [],
             core_values=core_values or [],
@@ -692,10 +697,21 @@ class ScenarioView:
             "dialogue": "对话",
             "debate": "辩论",
             "cooperation": "协作",
-            "emergency": "突发事件"
+            "emergency": "突发事件",
+            "daily_life": "日常生活"
         }
         type_text = self.font.render(f"[{type_labels.get(self.scenario_type, self.scenario_type)}]", True, self.accent_color)
         surface.blit(type_text, (name_text.get_width() + 30, 18))
+
+        # 统计信息显示在右上角（进度条上方，不被详情面板挡住）
+        stats_text = self.font.render(
+            f"第{self.current_day}天 | 轮数:{self.current_round}/{self.interact_rounds} | 对话:{self.total_dialogue_count} | 智能体:{len(self.agents)}",
+            True, (180, 180, 180)
+        )
+        # 放在右上角，但不超过详情面板的边界
+        panel_left = self.panel_rect.x - 10  # 详情面板左边
+        stats_rect = stats_text.get_rect(right=panel_left, top=8)
+        surface.blit(stats_text, stats_rect)
 
         round_text = self.font.render(f"第 {self.current_round} / {self.max_rounds} 轮", True, (200, 200, 200))
         round_rect = round_text.get_rect(right=self.width - 20, centery=self.header_height // 2)
@@ -949,6 +965,51 @@ class ScenarioView:
         else:
             return "悲伤"
 
+    def _wrap_text(self, text: str, max_width: int) -> List[str]:
+        """文字自动换行
+
+        Args:
+            text: 要换行的文字
+            max_width: 最大宽度（像素）
+
+        Returns:
+            换行后的文字列表
+        """
+        if not text:
+            return [""]
+
+        lines = []
+        words = text.split()
+        current_line = ""
+
+        for word in words:
+            test_line = current_line + (" " if current_line else "") + word
+            test_width = self.font.size(test_line)[0]
+            if test_width <= max_width:
+                current_line = test_line
+            else:
+                if current_line:
+                    lines.append(current_line)
+                current_line = word
+                # 如果单个词就超过宽度，强制换行
+                if self.font.size(word)[0] > max_width:
+                    # 尝试按字符拆分
+                    sub_line = ""
+                    for char in word:
+                        sub_test = sub_line + char
+                        if self.font.size(sub_test)[0] > max_width:
+                            if sub_line:
+                                lines.append(sub_line)
+                            sub_line = char
+                        else:
+                            sub_line = sub_test
+                    current_line = sub_line
+
+        if current_line:
+            lines.append(current_line)
+
+        return lines if lines else [""]
+
     def _draw_agent_detail(self, surface: pygame.Surface, agent: AgentVisual):
         """绘制智能体详情（列形式展示）
 
@@ -956,18 +1017,26 @@ class ScenarioView:
         """
         # 详情区域从智能体表格下方开始
         detail_start_y = 360  # 表格结束位置
+        content_start_y = detail_start_y + 30  # 内容区域开始位置（标题下方）
         panel_width = self.panel_rect.width - 40
         panel_x = self.panel_rect.x + 20
+        detail_height = self.height - detail_start_y - 60  # 底部留60给控制栏
 
-        # 分隔线
+        # 先绘制分隔线和标题（不滚动，在裁剪区域外）
         pygame.draw.line(surface, (60, 64, 72),
                         (self.panel_rect.x, detail_start_y - 5),
                         (self.panel_rect.right, detail_start_y - 5), 2)
 
-        # 标题
         title = self.font_large.render(f"详情: {agent.name}", True, (255, 255, 255))
         surface.blit(title, (panel_x, detail_start_y))
-        y_offset = detail_start_y + 30
+
+        # 创建内容区域的裁剪区域（从内容开始位置向下）
+        original_clip = surface.get_clip()
+        content_clip_rect = pygame.Rect(self.panel_rect.x, content_start_y, self.panel_rect.width, detail_height - 30)
+        surface.set_clip(content_clip_rect)
+
+        # 应用滚动偏移 - 内容向上滚动（offset增加，内容y减小）
+        y_offset = content_start_y - self.detail_scroll_offset
 
         # ===== 状态指标列表面（3列布局）=====
         # 第1列：基本信息
@@ -1039,10 +1108,13 @@ class ScenarioView:
             surface.blit(short_label, (panel_x, y_offset))
             y_offset += 18
             for mem in agent.short_term_memories[:5]:  # 最多显示5条
-                mem_text = mem[:40] + "..." if len(mem) > 40 else mem
-                mem_surface = self.font.render(f"  • {mem_text}", True, (200, 200, 200))
-                surface.blit(mem_surface, (panel_x, y_offset))
-                y_offset += 16
+                # 使用换行函数处理长文本
+                wrapped_lines = self._wrap_text(mem, panel_width - 30)
+                for i, line in enumerate(wrapped_lines):
+                    prefix = "  • " if i == 0 else "    "  # 只有第一行加"•"
+                    mem_surface = self.font.render(f"{prefix}{line}", True, (200, 200, 200))
+                    surface.blit(mem_surface, (panel_x, y_offset))
+                    y_offset += 16
         else:
             short_label = self.font.render("短期记忆 (0):", True, (255, 180, 100))
             surface.blit(short_label, (panel_x, y_offset))
@@ -1056,10 +1128,13 @@ class ScenarioView:
             surface.blit(long_label, (panel_x, y_offset))
             y_offset += 18
             for mem in agent.long_term_memories[:5]:  # 最多显示5条
-                mem_text = mem[:40] + "..." if len(mem) > 40 else mem
-                mem_surface = self.font.render(f"  • {mem_text}", True, (200, 200, 200))
-                surface.blit(mem_surface, (panel_x, y_offset))
-                y_offset += 16
+                # 使用换行函数处理长文本
+                wrapped_lines = self._wrap_text(mem, panel_width - 30)
+                for i, line in enumerate(wrapped_lines):
+                    prefix = "  • " if i == 0 else "    "  # 只有第一行加"•"
+                    mem_surface = self.font.render(f"{prefix}{line}", True, (200, 200, 200))
+                    surface.blit(mem_surface, (panel_x, y_offset))
+                    y_offset += 16
         else:
             long_label = self.font.render("长期记忆 (0):", True, (100, 180, 255))
             surface.blit(long_label, (panel_x, y_offset))
@@ -1073,22 +1148,24 @@ class ScenarioView:
             surface.blit(traits_label, (panel_x, y_offset))
             y_offset += 18
             traits_text = ", ".join(agent.personality_traits[:3])
-            if len(traits_text) > 35:
-                traits_text = traits_text[:35] + "..."
-            traits_surface = self.font.render(traits_text, True, (200, 200, 220))
-            surface.blit(traits_surface, (panel_x, y_offset))
-            y_offset += 20
+            # 使用换行函数处理长文本
+            wrapped_lines = self._wrap_text(traits_text, panel_width - 30)
+            for line in wrapped_lines:
+                traits_surface = self.font.render(line, True, (200, 200, 220))
+                surface.blit(traits_surface, (panel_x, y_offset))
+                y_offset += 16
 
         if agent.core_values:
             values_label = self.font.render("价值观:", True, (150, 150, 150))
             surface.blit(values_label, (panel_x, y_offset))
             y_offset += 18
             values_text = ", ".join(agent.core_values[:3])
-            if len(values_text) > 35:
-                values_text = values_text[:35] + "..."
-            values_surface = self.font.render(values_text, True, (200, 200, 220))
-            surface.blit(values_surface, (panel_x, y_offset))
-            y_offset += 20
+            # 使用换行函数处理长文本
+            wrapped_lines = self._wrap_text(values_text, panel_width - 30)
+            for line in wrapped_lines:
+                values_surface = self.font.render(line, True, (200, 200, 220))
+                surface.blit(values_surface, (panel_x, y_offset))
+                y_offset += 16
 
         # ===== 目标 =====
         if agent.goals:
@@ -1096,9 +1173,13 @@ class ScenarioView:
             surface.blit(goals_label, (panel_x, y_offset))
             y_offset += 18
             for i, goal in enumerate(agent.goals[:2]):
-                goal_text = self.font.render(f"• {goal[:30]}...", True, (200, 200, 180))
-                surface.blit(goal_text, (panel_x, y_offset))
-                y_offset += 18
+                # 使用换行函数处理长文本
+                wrapped_lines = self._wrap_text(goal, panel_width - 30)
+                for j, line in enumerate(wrapped_lines):
+                    prefix = "• " if j == 0 else "  "  # 只有第一行加"•"
+                    goal_text = self.font.render(f"{prefix}{line}", True, (200, 200, 180))
+                    surface.blit(goal_text, (panel_x, y_offset))
+                    y_offset += 16
 
         # ===== 当前对话 =====
         if agent.current_dialog:
@@ -1116,6 +1197,35 @@ class ScenarioView:
                 dialog_text = agent.current_dialog
             text_surface = self.font.render(dialog_text, True, (200, 200, 200))
             surface.blit(text_surface, (panel_x + 8, y_offset + 10))
+
+        # 保存内容总高度（从内容区域开始计算）
+        self.detail_content_height = y_offset - content_start_y
+
+        # 恢复原始裁剪区域
+        surface.set_clip(original_clip)
+
+        # 绘制滚动条（在内容区域内）
+        content_area_height = detail_height - 30  # 内容区域高度
+        max_scroll = max(0, self.detail_content_height - content_area_height)
+        if max_scroll > 0:
+            # 滚动条
+            scrollbar_x = self.panel_rect.right - 15
+            scrollbar_top = content_start_y
+            scrollbar_height = content_area_height
+
+            # 滚动条背景
+            pygame.draw.rect(surface, (60, 64, 72),
+                          (scrollbar_x, scrollbar_top, 6, scrollbar_height), border_radius=3)
+
+            # 滚动条滑块
+            visible_ratio = content_area_height / self.detail_content_height
+            thumb_height = max(20, int(scrollbar_height * visible_ratio))
+            # offset=0时thumb在顶部，offset=max_scroll时thumb在底部
+            scroll_ratio = self.detail_scroll_offset / max_scroll if max_scroll > 0 else 0
+            thumb_y = scrollbar_top + int(scroll_ratio * (scrollbar_height - thumb_height))
+
+            pygame.draw.rect(surface, (100, 120, 150),
+                          (scrollbar_x, thumb_y, 6, thumb_height), border_radius=3)
 
     def _draw_agent_detail_compact(self, surface: pygame.Surface, agent: AgentVisual):
         """绘制智能体详情（简洁版 - 开关关闭时显示）"""
@@ -1206,22 +1316,24 @@ class ScenarioView:
         end_today_rect_center = end_today_text.get_rect(center=end_today_rect.center)
         surface.blit(end_today_text, end_today_rect_center)
 
-        # 每日交互轮数标签和输入框
-        rounds_label = self.font.render("每日轮数:", True, (180, 180, 180))
-        surface.blit(rounds_label, (end_today_x + 100, btn_y + 8))
+        # 保存Session按钮
+        save_session_x = end_today_x + 100
+        self.save_session_rect = pygame.Rect(save_session_x, btn_y, 90, btn_height)
+        pygame.draw.rect(surface, (100, 80, 150), self.save_session_rect, border_radius=5)
+        save_text = self.font.render("保存", True, (255, 255, 255))
+        save_rect_center = save_text.get_rect(center=self.save_session_rect.center)
+        surface.blit(save_text, save_rect_center)
 
-        # 更新输入框位置（基于当前绘制位置）
-        input_x = end_today_x + 185
-        self.interact_rounds_input.rect.x = input_x
-        self.interact_rounds_input.rect.y = btn_y
-        self.interact_rounds_input.draw(surface)
+        # 加载Session按钮
+        load_session_x = save_session_x + 100
+        self.load_session_rect = pygame.Rect(load_session_x, btn_y, 90, btn_height)
+        pygame.draw.rect(surface, (80, 120, 160), self.load_session_rect, border_radius=5)
+        load_text = self.font.render("加载", True, (255, 255, 255))
+        load_rect_center = load_text.get_rect(center=self.load_session_rect.center)
+        surface.blit(load_text, load_rect_center)
 
-        # 统计信息（显示天数、轮数、对话次数、智能体数、位置数）
-        stats_text = self.font.render(
-            f"第{self.current_day}天 | 轮数:{self.current_round}/{self.interact_rounds} | 对话:{self.total_dialogue_count} | 智能体:{len(self.agents)}",
-            True, (180, 180, 180)
-        )
-        surface.blit(stats_text, (self.width - 420, bar_rect.y + 20))
+        # 统计信息（显示天数、轮数、对话次数、智能体数）- 移到顶部显示
+        # 在这里不再绘制，会在头部信息栏显示
 
     def draw(self, selected_agent_id: Optional[str] = None,
              is_paused: bool = False, speed: float = 1.0):
@@ -1317,6 +1429,17 @@ class ScenarioView:
                 self.camera_offset[1] += dy
             self.last_mouse_pos = event.pos
 
+        elif event.type == pygame.MOUSEWHEEL:
+            # 详情面板滚动 - MOUSEWHEEL事件没有pos属性，需用pygame.mouse.get_pos()
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+            if self.panel_rect.x < mouse_x < self.panel_rect.right:
+                # 计算最大滚动偏移
+                detail_height = self.height - 360 - 60  # 可视区域高度
+                max_scroll = max(0, self.detail_content_height - detail_height + 50)
+                # 向下滚动(event.y > 0)时增加offset，内容向上滚动
+                self.detail_scroll_offset += event.y * 30
+                self.detail_scroll_offset = max(0, min(self.detail_scroll_offset, max_scroll))
+
         elif event.type == pygame.KEYDOWN:
             # 如果每日交互轮数输入框处于激活状态，传递按键事件
             if self.interact_rounds_input.is_active:
@@ -1377,7 +1500,21 @@ class ScenarioView:
         end_today_x = speed_x + 120  # step_x + 90 = (speed_x + 230) + 90
         end_today_rect = pygame.Rect(end_today_x, btn_y, 90, 35)
         if end_today_rect.collidepoint(pos):
+            if self.interface.on_simulation_control:
+                self.interface.on_simulation_control("end_day", None)
             return "end_day"
+
+        # 保存Session按钮
+        if hasattr(self, 'save_session_rect') and self.save_session_rect.collidepoint(pos):
+            if self.interface.on_save_session:
+                self.interface.on_save_session()
+            return "save_session"
+
+        # 加载Session按钮
+        if hasattr(self, 'load_session_rect') and self.load_session_rect.collidepoint(pos):
+            if self.interface.on_load_session:
+                self.interface.on_load_session()
+            return "load_session"
 
         return None
 
@@ -1389,3 +1526,74 @@ class ScenarioView:
             if dx*dx + dy*dy < 400:
                 return agent.id
         return None
+
+    # ==================== 序列化支持 ====================
+
+    def to_dict(self) -> Dict[str, Any]:
+        """将场景视图状态序列化为字典
+
+        Returns:
+            Dict: 包含视图状态的字典
+        """
+        return {
+            "current_day": self.current_day,
+            "current_round": self.current_round,
+            "max_rounds": self.max_rounds,
+            "total_dialogue_count": self.total_dialogue_count,
+            "interact_rounds": self.interact_rounds,
+            "show_agent_details": self.show_agent_details,
+            "selected_agent_id": self.selected_agent_id,
+            "scenario_name": self.scenario_name,
+            "scenario_type": self.scenario_type,
+            "scenario_description": self.scenario_description,
+            "scenario_goals": self.scenario_goals,
+            "current_era": self.current_era,
+            # 位置和连接数据需要从外部传入，这里只存储位置名称
+            "locations": {
+                name: {
+                    "position": loc.position,
+                    "type": loc.type,
+                    "description": loc.description
+                }
+                for name, loc in self.locations.items()
+            },
+            "connections": self.connections,
+            "events": self.events,
+        }
+
+    def from_dict(self, data: Dict[str, Any]):
+        """从字典恢复场景视图状态
+
+        Args:
+            data: 包含视图状态的字典
+        """
+        self.current_day = data.get("current_day", 1)
+        self.current_round = data.get("current_round", 1)
+        self.max_rounds = data.get("max_rounds", 10)
+        self.total_dialogue_count = data.get("total_dialogue_count", 0)
+        self.interact_rounds = data.get("interact_rounds", 5)
+        self.show_agent_details = data.get("show_agent_details", True)
+        self.selected_agent_id = data.get("selected_agent_id")
+        self.scenario_name = data.get("scenario_name", "智能体模拟")
+        self.scenario_type = data.get("scenario_type", "dialogue")
+        self.scenario_description = data.get("scenario_description", "")
+        self.scenario_goals = data.get("scenario_goals", [])
+        self.current_era = data.get("current_era", "default")
+        self.events = data.get("events", [])
+
+        # 恢复位置数据
+        locations_data = data.get("locations", {})
+        self.locations.clear()
+        for name, info in locations_data.items():
+            self.locations[name] = LocationVisual(
+                name=name,
+                position=tuple(info.get("position", (0, 0))),
+                type=info.get("type", "默认"),
+                description=info.get("description", "")
+            )
+
+        # 恢复连接数据
+        self.connections = data.get("connections", {})
+
+        # 更新每日交互轮数显示
+        self.interact_rounds_input.text = str(self.interact_rounds)

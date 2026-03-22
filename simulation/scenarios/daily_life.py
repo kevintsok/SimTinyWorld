@@ -567,3 +567,59 @@ class DailyLifeScenario(BaseScenario):
                     agent.sleep()
             except Exception as e:
                 print(f"{agent.name} 休息时出错: {e}")
+
+    # ===== 序列化支持 =====
+
+    def to_dict(self) -> Dict[str, Any]:
+        """将场景转换为字典表示
+
+        Returns:
+            Dict[str, Any]: 场景状态字典
+        """
+        return {
+            "days": self.days,
+            "rounds_per_day": self.rounds_per_day,
+            "max_participants": self.max_participants,
+            "fast_mode": self.fast_mode,
+            "is_initialized": self.is_initialized,
+            "is_completed": self.is_completed,
+            "available_locations": self.available_locations,
+            "location_descriptions": self.location_descriptions,
+            "result": self.result,
+            "data": self.data
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any], config: Dict[str, Any] = None) -> "DailyLifeScenario":
+        """从字典创建场景实例
+
+        Args:
+            data: 场景状态字典
+            config: 配置字典（可选）
+
+        Returns:
+            DailyLifeScenario: 恢复的场景实例
+        """
+        # 使用配置创建新实例
+        scenario = cls(config or {})
+
+        # 恢复配置参数
+        scenario.days = data.get("days", 3)
+        scenario.rounds_per_day = data.get("rounds_per_day", 5)
+        scenario.max_participants = data.get("max_participants", 4)
+        scenario.fast_mode = data.get("fast_mode", False)
+
+        # 恢复状态
+        scenario.is_initialized = data.get("is_initialized", False)
+        scenario.is_completed = data.get("is_completed", False)
+        scenario.available_locations = data.get("available_locations", [])
+        scenario.location_descriptions = data.get("location_descriptions", {})
+        scenario.result = data.get("result", {"steps": 0, "events": [], "summary": ""})
+        scenario.data = data.get("data", {})
+
+        # 不序列化锁，恢复时重建
+        global agent_locks, global_lock
+        agent_locks = {}
+        global_lock = threading.Lock()
+
+        return scenario
