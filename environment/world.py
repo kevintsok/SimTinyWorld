@@ -25,7 +25,6 @@ class Location:
 class World(BaseEnvironment):
     """表示智能体活动的世界"""
 
-    # 单例实例
     _instance = None
 
     @classmethod
@@ -45,12 +44,9 @@ class World(BaseEnvironment):
             location_count: 要创建的位置数量
             config: 配置字典
         """
-        # 调用父类初始化
         super().__init__(config or {})
-
-        # 设置单例实例
         World._instance = self
-        
+
         # 是否使用可视化模式
         self.visual_mode = visual_mode
         
@@ -70,11 +66,8 @@ class World(BaseEnvironment):
                 description=info["description"],
                 connected_locations=connected_locations
             )
-        
-        # 智能体信息缓存
-        self.agents = {}  # {agent_id: agent_obj}
-        
-        # 可视化器相关
+
+        self.agents = {}
         self.visualizer = None
         self.is_visualizer_active = False
         
@@ -107,13 +100,6 @@ class World(BaseEnvironment):
                 connected_locations=connected_locations
             )
             
-    def _create_locations(self, location_count: int):
-        """创建位置
-        
-        已由__init__中的创建布局代码实现，此方法保留以支持修改后的代码
-        """
-        pass
-    
     def _init_visualizer(self):
         """初始化可视化器
         
@@ -298,8 +284,6 @@ class World(BaseEnvironment):
         if self.visual_mode and self.visualizer:
             self.visualizer.add_dialog(agent_id, text)
 
-    # ===== 继承自 BaseEnvironment 的抽象方法实现 =====
-
     def add_entity(self, entity: BaseEntity, position: Optional[str] = None) -> bool:
         """添加实体
 
@@ -385,8 +369,6 @@ class World(BaseEnvironment):
         """
         self.time += delta_time * self.time_scale
 
-    # ===== 原有方法 =====
-
     def get_all_locations(self) -> List[str]:
         """获取所有位置名称
 
@@ -394,8 +376,6 @@ class World(BaseEnvironment):
             List[str]: 所有位置名称的列表
         """
         return list(self.locations.keys())
-
-    # ===== 序列化支持 =====
 
     def to_dict(self) -> Dict[str, Any]:
         """将世界转换为字典表示
@@ -439,14 +419,9 @@ class World(BaseEnvironment):
         # 创建新的World实例（不依赖单例）
         world = cls.__new__(cls)
 
-        # 调用父类初始化
         from simulation.base import BaseEnvironment
         BaseEnvironment.__init__(world, {})
-
-        # 设置单例实例（保持向后兼容）
         cls._instance = world
-
-        # 设置可视化模式
         world.visual_mode = visual_mode
 
         # 恢复布局位置
