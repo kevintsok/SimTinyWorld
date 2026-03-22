@@ -1205,6 +1205,30 @@ class BaseAgent(SimBaseAgent):
                 return None
         return None
 
+    @staticmethod
+    def _normalize_plan_durations(plan: List[Dict], max_rounds: int) -> None:
+        """调整计划项的duration以确保总duration不超过max_rounds"""
+        total_duration = sum(item["duration"] for item in plan)
+        if total_duration > max_rounds:
+            factor = max_rounds / total_duration
+            for item in plan:
+                item["duration"] = max(1, int(item["duration"] * factor))
+
+            total_duration = sum(item["duration"] for item in plan)
+            if total_duration < max_rounds:
+                plan[-1]["duration"] += (max_rounds - total_duration)
+            elif total_duration > max_rounds:
+                extra = total_duration - max_rounds
+                for i in reversed(range(len(plan))):
+                    if plan[i]["duration"] > extra:
+                        plan[i]["duration"] -= extra
+                        break
+                    else:
+                        extra -= (plan[i]["duration"] - 1)
+                        plan[i]["duration"] = 1
+                        if extra == 0:
+                            break
+
     def _generate_default_wealth(self) -> Dict[str, float]:
         """生成默认的财富数据，当LLM生成失败时使用"""
         # 基于职业和年龄设置默认金钱财富
@@ -1309,30 +1333,8 @@ class BaseAgent(SimBaseAgent):
                 total_duration += item["duration"]
             
             # 确保总duration不超过max_rounds
-            if total_duration > max_rounds:
-                # 按比例缩减duration
-                factor = max_rounds / total_duration
-                for item in cleaned_plan:
-                    item["duration"] = max(1, int(item["duration"] * factor))
-                
-                # 可能需要再次调整以确保总和正确
-                total_duration = sum(item["duration"] for item in cleaned_plan)
-                if total_duration < max_rounds:
-                    # 给最后一个计划项增加剩余的轮数
-                    cleaned_plan[-1]["duration"] += (max_rounds - total_duration)
-                elif total_duration > max_rounds:
-                    # 从最后一个计划项减去多余的轮数
-                    extra = total_duration - max_rounds
-                    for i in reversed(range(len(cleaned_plan))):
-                        if cleaned_plan[i]["duration"] > extra:
-                            cleaned_plan[i]["duration"] -= extra
-                            break
-                        else:
-                            extra -= (cleaned_plan[i]["duration"] - 1)
-                            cleaned_plan[i]["duration"] = 1
-                            if extra == 0:
-                                break
-            
+            self._normalize_plan_durations(cleaned_plan, max_rounds)
+
             # 更新智能体的计划和状态
             self.daily_plan = cleaned_plan
             self.current_plan_index = 0
@@ -1725,30 +1727,8 @@ class BaseAgent(SimBaseAgent):
                     total_duration += item["duration"]
                 
                 # 确保总duration不超过max_rounds
-                if total_duration > max_rounds:
-                    # 按比例缩减duration
-                    factor = max_rounds / total_duration
-                    for item in cleaned_plan:
-                        item["duration"] = max(1, int(item["duration"] * factor))
-                    
-                    # 可能需要再次调整以确保总和正确
-                    total_duration = sum(item["duration"] for item in cleaned_plan)
-                    if total_duration < max_rounds:
-                        # 给最后一个计划项增加剩余的轮数
-                        cleaned_plan[-1]["duration"] += (max_rounds - total_duration)
-                    elif total_duration > max_rounds:
-                        # 从最后一个计划项减去多余的轮数
-                        extra = total_duration - max_rounds
-                        for i in reversed(range(len(cleaned_plan))):
-                            if cleaned_plan[i]["duration"] > extra:
-                                cleaned_plan[i]["duration"] -= extra
-                                break
-                            else:
-                                extra -= (cleaned_plan[i]["duration"] - 1)
-                                cleaned_plan[i]["duration"] = 1
-                                if extra == 0:
-                                    break
-                
+                self._normalize_plan_durations(cleaned_plan, max_rounds)
+
                 # 更新智能体的计划和状态
                 self.daily_plan = cleaned_plan
                 if cleaned_plan:
