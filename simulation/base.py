@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass, field
 from enum import Enum
+import time
 
 
 class EntityState(Enum):
@@ -84,17 +85,13 @@ class BaseAgent(BaseEntity, ABC):
 
     def __init__(self, agent_id: str, name: str):
         super().__init__(agent_id, name)
-        self.state = EntityState.IDLE
 
-        # 记忆系统
         self.short_term_memory: List[Memory] = []
         self.long_term_memory: List[Memory] = []
 
-        # 心理状态
         self.mood: Dict[str, Any] = {"value": 0.0, "description": "平静"}
         self.personality: Dict[str, Any] = {}
 
-        # 财富状态（时间、社交、健康、精神、金钱）
         self.wealth: Dict[str, float] = {
             "time": 0.0,
             "social": 0.0,
@@ -141,18 +138,15 @@ class BaseAgent(BaseEntity, ABC):
             importance: 重要性 (0-1)
             is_long_term: 是否为长期记忆
         """
-        import time
         memory = Memory(content, time.time(), importance)
 
         if is_long_term:
             self.long_term_memory.append(memory)
-            # 限制长期记忆数量
             max_long_term = 200
             if len(self.long_term_memory) > max_long_term:
                 self.long_term_memory = self.long_term_memory[-max_long_term:]
         else:
             self.short_term_memory.append(memory)
-            # 限制短期记忆数量
             max_short_term = 50
             if len(self.short_term_memory) > max_short_term:
                 self.short_term_memory = self.short_term_memory[-max_short_term:]
@@ -177,11 +171,9 @@ class BaseAgent(BaseEntity, ABC):
             delta: 变化量
             reason: 变化原因
         """
-        # 更新心情值
         new_value = self.mood["value"] + delta
         self.mood["value"] = max(-1.0, min(1.0, new_value))
 
-        # 更新心情描述
         if self.mood["value"] > 0.7:
             self.mood["description"] = "非常开心"
         elif self.mood["value"] > 0.3:
