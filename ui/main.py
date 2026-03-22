@@ -127,8 +127,6 @@ class SimulationController:
         # 模拟步数计数器
         self.current_step = 0
 
-    # ==================== 回调处理 ====================
-
     def _on_scenario_selected(self, scenario_id: str, config: dict):
         """场景被选中"""
         print(f"场景选中: {scenario_id}, 配置: {config}")
@@ -213,8 +211,6 @@ class SimulationController:
     def _on_agent_detail_toggle(self, visible: bool):
         """详情显示状态变化"""
         print(f"详情显示: {visible}")
-
-    # ==================== Session管理 ====================
 
     def to_dict(self) -> Dict[str, Any]:
         """将UI状态序列化为字典
@@ -365,8 +361,6 @@ class SimulationController:
         # 切换到场景视图
         self.current_view = "scenario"
         pygame.display.set_caption(f"多智能体社会模拟 - {self.current_session_name}")
-
-    # ==================== 原有回调 ====================
 
     def _on_return_to_menu(self):
         """返回主菜单"""

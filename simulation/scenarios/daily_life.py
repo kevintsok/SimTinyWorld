@@ -408,9 +408,10 @@ class DailyLifeScenario(BaseScenario):
                 next_speaker.add_memory(memory_text)
 
             # 其他人听到对话
+            hearing_template = f'在{location}，{next_speaker.name}说："{{}}"'  # Precompute template once
             for agent in agents:
                 if agent.id != next_speaker.id:
-                    hearing_memory = f'在{location}，{next_speaker.name}说："{response}"'
+                    hearing_memory = hearing_template.format(response)
                     with self.agent_locks.get(agent.id, self.global_lock):
                         agent.add_memory(hearing_memory)
 
