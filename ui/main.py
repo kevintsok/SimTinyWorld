@@ -24,6 +24,7 @@ from environment.world import World
 from environment.layout import EnvironmentLayout
 from agent.base_agent import BaseAgent
 from session import SessionManager
+from simulation.scenarios.daily_life import DailyLifeScenario
 
 
 class SimulationController:
@@ -118,6 +119,12 @@ class SimulationController:
 
         # 当前场景类型
         self.scenario_type = "daily_life"
+
+        # DailyLifeScenario实例
+        self.scenario: Optional[DailyLifeScenario] = None
+
+        # 模拟步数计数器
+        self.current_step = 0
 
     # ==================== 回调处理 ====================
 
@@ -395,6 +402,22 @@ class SimulationController:
         location_count = config.get("locations", 5)
         self.world = World(visual_mode=False, location_count=location_count)
 
+        # 初始化DailyLifeScenario
+        if self.scenario_type == "daily_life":
+            # 创建config字典
+            scenario_config = {
+                "fast_mode": self.fast_mode,
+                "rounds_per_day": config.get("interact_rounds", 5)
+            }
+            self.scenario = DailyLifeScenario(config=scenario_config)
+            # 设置world引用（DailyLifeScenario使用self.world而不是self.environment）
+            self.scenario.world = self.world
+            self.scenario.setup()
+            # 设置每日轮数
+            self.scenario.rounds_per_day = config.get("interact_rounds", 5)
+        else:
+            self.scenario = None
+
         # 获取位置数据
         locations = {}
         for name, info in self.world.layout.locations.items():
@@ -583,49 +606,48 @@ class SimulationController:
         if not self.world or not self.agents:
             return
 
-        # 随机移动一些智能体
-        for agent_id, agent in list(self.agents.items()):
-            if random.random() < 0.3:  # 30%概率移动
-                current_loc = self.world.get_agent_location(agent_id)
-                if current_loc:
-                    connected = self.world.get_connected_locations(current_loc)
-                    if connected:
-                        new_loc = random.choice(connected)
-                        self.world.move_agent(agent, current_loc, new_loc)
-                        self.scenario_view.move_agent(agent_id, current_loc, new_loc, duration=1.0)
+        # 如果有scenario，使用scenario的完整逻辑
+        if self.scenario:
+            # 调用scenario的step方法
+            self.current_step += 1
+            step_result = self.scenario.step(self.agents, self.world, self.current_step)
 
-        # 随机显示对话
-        dialogue_this_round = 0
-        for agent_id, agent in list(self.agents.items()):
-            if random.random() < 0.2:  # 20%概率说话
-                if self.fast_mode:
-                    texts = [
-                        "今天天气真好！", "你好！", "最近怎么样？",
-                        "有什么新鲜事吗？", "一起出去走走吧！",
-                        "这个项目很有趣", "我同意你的看法"
-                    ]
-                else:
-                    texts = [
-                        f"我是{agent.name}",
-                        f"我的MBTI是{agent.mbti}",
-                        agent.mood.get("description", "平静")
-                    ]
-                text = random.choice(texts)
-                self.scenario_view.show_dialog(agent_id, text, duration=2.0)
-                # 添加到智能体短期记忆
-                agent.add_memory(f"在模拟中发言: {text}")
-                dialogue_this_round += 1
+            # 处理对话结果
+            dialogues = step_result.get("dialogues", [])
+            for dialogue in dialogues:
+                location = dialogue.get("location", "")
+                lines = dialogue.get("lines", [])
 
-        # 累计对话次数
-        self.total_dialogue_count += dialogue_this_round
+                # 找到说话agent并显示对话
+                for line in lines:
+                    speaker_name = line.get("speaker", "")
+                    content = line.get("content", "")
 
-        # 更新记忆统计
-        self._sync_agent_memory_counts()
+                    # 找到对应的agent_id
+                    for agent_id, agent in self.agents.items():
+                        if agent.name == speaker_name:
+                            self.scenario_view.show_dialog(agent_id, content, duration=3.0)
+                            break
 
-        # 更新当前交互轮数
-        self.current_interact_round += 1
-        self.scenario_view.set_round(self.current_interact_round)
-        self.scenario_view.set_total_dialogue_count(self.total_dialogue_count)
+            # 更新记忆统计
+            self._sync_agent_memory_counts()
+
+            # 更新轮数
+            self.current_interact_round += 1
+            self.scenario_view.set_round(self.current_interact_round)
+            self.scenario_view.set_total_dialogue_count(self.total_dialogue_count)
+
+        else:
+            # 没有scenario时的简单处理（备用）
+            for agent_id, agent in list(self.agents.items()):
+                if random.random() < 0.3:  # 30%概率移动
+                    current_loc = self.world.get_agent_location(agent_id)
+                    if current_loc:
+                        connected = self.world.get_connected_locations(current_loc)
+                        if connected:
+                            new_loc = random.choice(connected)
+                            self.world.move_agent(agent, current_loc, new_loc)
+                            self.scenario_view.move_agent(agent_id, current_loc, new_loc, duration=1.0)
 
     def _sync_agent_memory_counts(self):
         """同步智能体记忆数量到UI"""

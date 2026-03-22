@@ -62,11 +62,12 @@ class DailyLifeScenario(BaseScenario):
         """初始化场景"""
         self.is_initialized = True
 
-        # 设置位置信息（如果有环境）
-        if self.environment and hasattr(self.environment, "locations"):
-            self.available_locations = list(self.environment.locations.keys())
+        # 设置位置信息（DailyLifeScenario使用self.world）
+        env = getattr(self, 'world', None) or self.environment
+        if env and hasattr(env, "locations"):
+            self.available_locations = list(env.locations.keys())
             self.location_descriptions = {
-                loc: getattr(self.environment.locations[loc], "description", "")
+                loc: getattr(env.locations[loc], "description", "")
                 for loc in self.available_locations
             }
 
@@ -362,18 +363,19 @@ class DailyLifeScenario(BaseScenario):
         location: str,
         step_result: Dict[str, Any]
     ) -> None:
-        """运行一轮对话
+        """运行一轮对话 - 持续进行直到自然结束
 
         Args:
             agents: 智能体列表
             location: 位置
             step_result: 步进结果
         """
-        # 选择起始发言者
-        last_speaker = random.choice(agents)
-
-        # 对话轮次
-        conversation_rounds = min(random.randint(3, 6), len(agents) * 2)
+        # 获取地点描述（DailyLifeScenario使用self.world）
+        loc_desc = ""
+        if hasattr(self, 'world') and self.world and hasattr(self.world, 'locations'):
+            loc = self.world.locations.get(location)
+            if loc and hasattr(loc, 'description'):
+                loc_desc = loc.description
 
         # 记录说过再见的智能体
         said_goodbye = set()
@@ -381,50 +383,40 @@ class DailyLifeScenario(BaseScenario):
         # 完整对话记录
         full_dialogue = []
 
-        for i in range(conversation_rounds):
-            # 选择下一个发言者
-            if i > 0:
-                available = [a for a in agents if a.id not in said_goodbye]
-                if not available:
-                    break
+        # 对话历史（用于传递上下文）
+        conversation_history = []
 
-                # 尝试选择被提到的智能体
-                mentioned = []
-                for a in available:
-                    if a.id != last_speaker.id and hasattr(self, '_last_response'):
-                        if a.name in self._last_response:
-                            mentioned.append(a)
+        # 选择起始发言者
+        last_speaker = None
 
-                if mentioned and random.random() < 0.8:
-                    next_speaker = random.choice(mentioned)
-                else:
-                    candidates = [a for a in available if a.id != last_speaker.id]
-                    next_speaker = random.choice(candidates) if candidates else last_speaker
-            else:
-                next_speaker = random.choice(agents)
+        # 对话轮次计数
+        round_count = 0
+
+        while True:
+            round_count += 1
+
+            # 选择下一个发言者（允许重复选择，让对话流动）
+            next_speaker = self._select_next_speaker(
+                agents, last_speaker, said_goodbye, conversation_history
+            )
+
+            if next_speaker is None:
+                break
 
             # 构建提示
-            if i == 0:
-                query = f"我们大家现在在{location}。作为对话的第一个发言者，请友好地开始对话。"
-            else:
-                others = [a.name for a in agents if a.id != next_speaker.id]
-                others_str = "、".join(others)
-                query = f"{last_speaker.name}对我说：'{self._last_response}' 我们现在在{location}，还有{others_str}也在场。"
+            query = self._build_dialogue_query(
+                next_speaker, agents, location, loc_desc, conversation_history, last_speaker
+            )
 
             # 获取回复
-            try:
-                if self.fast_mode:
-                    # 快速测试模式：使用预设回复
-                    response = random.choice(self._mock_responses)
-                else:
-                    with agent_locks.get(next_speaker.id, global_lock):
-                        response = next_speaker.think(query) if hasattr(next_speaker, 'think') else ""
-            except Exception as e:
-                response = "（看起来有些犹豫，没有说话）"
+            response = self._get_dialogue_response(next_speaker, query, conversation_history)
 
             # 打印和记录
             print(f"{next_speaker.name}: {response}")
             full_dialogue.append({"speaker": next_speaker.name, "content": response})
+
+            # 记录到对话历史
+            conversation_history.append({"speaker": next_speaker.name, "content": response})
 
             # 记忆
             memory_text = f"在{location}，我对大家说：'{response}'"
@@ -445,8 +437,29 @@ class DailyLifeScenario(BaseScenario):
             if "再见" in response or "拜拜" in response:
                 said_goodbye.add(next_speaker.id)
 
-            # 超过80%说再见，结束对话
+            # 改进的结束检测
+            should_end = False
+
+            # 条件1：超过80%说再见
             if len(said_goodbye) >= len(agents) * 0.8:
+                should_end = True
+            # 条件2：对话轮次过多（最多12轮）
+            elif len(conversation_history) > 12:
+                should_end = True
+            # 条件3：连续3轮都是短回复（客套话）
+            elif len(conversation_history) >= 3:
+                recent = conversation_history[-3:]
+                if all(len(h['content']) < 10 for h in recent):
+                    should_end = True
+            # 条件4：LLM判断对话是否结束（只有对话超过4轮才判断）
+            elif len(conversation_history) >= 4 and not self.fast_mode:
+                try:
+                    if next_speaker.should_conversation_end(conversation_history[-3:]):
+                        should_end = True
+                except Exception as e:
+                    pass  # 如果判断失败，继续对话
+
+            if should_end:
                 break
 
             last_speaker = next_speaker
@@ -457,6 +470,193 @@ class DailyLifeScenario(BaseScenario):
             "participants": [a.name for a in agents],
             "lines": full_dialogue
         })
+
+    def _select_next_speaker(
+        self,
+        agents: List[Any],
+        last_speaker: Any,
+        said_goodbye: set,
+        conversation_history: List[Dict]
+    ) -> Any:
+        """选择下一个发言者
+
+        Args:
+            agents: 智能体列表
+            last_speaker: 上一个发言者
+            said_goodbye: 已说再见的智能体ID集合
+            conversation_history: 对话历史
+
+        Returns:
+            下一个发言的智能体，如果没有可用智能体则返回None
+        """
+        available = [a for a in agents if a.id not in said_goodbye]
+        if not available:
+            return None
+
+        # 第一个发言者
+        if last_speaker is None:
+            return random.choice(agents)
+
+        # 尝试选择被提到的智能体
+        mentioned = []
+        last_response = getattr(self, '_last_response', '')
+        for a in available:
+            if a.id != last_speaker.id and last_response:
+                if a.name in last_response:
+                    mentioned.append(a)
+
+        if mentioned and random.random() < 0.8:
+            # E型优先接话
+            e_mentioned = [a for a in mentioned if a.mbti and a.mbti.startswith('E')]
+            if e_mentioned and random.random() < 0.6:
+                return random.choice(e_mentioned)
+            else:
+                return random.choice(mentioned)
+        else:
+            candidates = [a for a in available if a.id != last_speaker.id]
+            if not candidates:
+                return None
+
+            # 加权选择：E型略高概率
+            weights = []
+            for a in candidates:
+                weight = 1.0 if not (a.mbti and a.mbti.startswith('I')) else 0.6
+                weights.append(weight)
+            total = sum(weights)
+            r = random.random() * total
+            cumsum = 0
+            for idx, a in enumerate(candidates):
+                cumsum += weights[idx]
+                if r <= cumsum:
+                    return a
+            return candidates[0]
+
+    def _build_dialogue_query(
+        self,
+        speaker: Any,
+        agents: List[Any],
+        location: str,
+        loc_desc: str,
+        conversation_history: List[Dict],
+        last_speaker: Any
+    ) -> str:
+        """构建对话提示
+
+        Args:
+            speaker: 当前发言者
+            agents: 所有智能体列表
+            location: 位置名称
+            loc_desc: 位置描述
+            conversation_history: 对话历史
+            last_speaker: 上一个发言者
+
+        Returns:
+            str: 提示文本
+        """
+        # 第一个发言者 - 场景感知的开场
+        if not conversation_history:
+            others = [a for a in agents if a.id != speaker.id]
+            others_info = "、".join([f"{a.name}({a.mbti})" for a in others])
+
+            return f"""你是{speaker.name}，性格是{speaker.mbti}。
+
+你现在在{location}，这里是{loc_desc or '一个普通的室内空间'}。
+你身边有：{others_info}。
+
+请根据你的性格和当前场景，自然地发起一段对话。
+开场白应该：
+1. 与当前场景和地点相关
+2. 符合你的MBTI性格
+3. 自然、不生硬，像真实的人际交流
+
+只需要生成一句开场白，不要说"作为XX"这样的话。"""
+
+        # 继续对话 - 包含历史
+        recent_history = conversation_history[-4:]
+        history_str = "\n".join([f"{h['speaker']}说：'{h['content']}'" for h in recent_history])
+
+        others = [a for a in agents if a.id != speaker.id]
+        others_str = "、".join([a.name for a in others])
+
+        return f"""最近的对话：
+{history_str}
+
+现在{last_speaker.name}说了：'{self._last_response}'
+我们在{location}，还有{others_str}也在场。
+请自然地接话，保持话题连贯性。"""
+
+    def _get_dialogue_response(
+        self,
+        speaker: Any,
+        query: str,
+        conversation_history: List[Dict]
+    ) -> str:
+        """获取智能体回复
+
+        Args:
+            speaker: 发言者
+            query: 提示文本
+            conversation_history: 对话历史
+
+        Returns:
+            str: 回复内容
+        """
+        try:
+            if self.fast_mode:
+                # 快速测试模式：根据对话阶段选择回复类型
+                return self._get_mock_response(conversation_history)
+            else:
+                with agent_locks.get(speaker.id, global_lock):
+                    history = conversation_history[-4:] if conversation_history else []
+                    if hasattr(speaker, 'think'):
+                        return speaker.think(query, history=history)
+                    return ""
+        except Exception as e:
+            print(f"对话响应出错: {e}")
+            return "（看起来有些犹豫，没有说话）"
+
+    def _get_mock_response(self, conversation_history: List[Dict]) -> str:
+        """快速测试模式下的mock回复
+
+        Args:
+            conversation_history: 对话历史
+
+        Returns:
+            str: 模拟回复
+        """
+        # 防御性检查：确保conversation_history是有效列表
+        if conversation_history is None:
+            conversation_history = []
+
+        # 根据对话深度选择回复类型
+        if not conversation_history:
+            # 开场白
+            responses = [
+                "你好，很高兴见到大家！",
+                "今天天气真不错啊。",
+                "大家都在这儿呢，有什么新鲜事吗？",
+            ]
+        elif len(conversation_history) >= 3 and len(conversation_history) % 3 == 0:
+            # 每3轮考虑说再见
+            if random.random() < 0.3:
+                return "好了，我先走了，大家回见！"
+            responses = [
+                "嗯，我同意你的看法。",
+                "是吗？那确实是这样。",
+                "有道理，让我想想...",
+            ]
+        else:
+            responses = [
+                "嗯，这个话题挺有意思的。",
+                "我倒是没想过这个问题。",
+                "你说得对，我也这么觉得。",
+                "那后来怎么样了呢？",
+            ]
+
+        # 再次防御性检查
+        if not responses:
+            return "嗯..."
+        return random.choice(responses)
 
     def _update_mood_from_response(
         self,
@@ -504,7 +704,8 @@ class DailyLifeScenario(BaseScenario):
 
             # 获取最近记忆
             recent = agent.short_term_memory[-3:] if agent.short_term_memory else []
-            activities = "\n".join([m.content for m in recent])
+            # short_term_memory是字符串列表
+            activities = "\n".join([m if isinstance(m, str) else getattr(m, 'content', str(m)) for m in recent])
 
             if not activities:
                 continue

@@ -94,6 +94,8 @@ class BaseAgent(SimBaseAgent):
         self.status = "空闲"  # 默认状态为空闲
         self.current_plan = None  # 当前行动计划
         self.plan_index = 0  # 计划步骤索引
+        self.daily_plan = []  # 每日计划列表
+        self.current_plan_index = 0  # 当前计划索引
         
         # 初始化LLM引擎（需要在初始化财富之前）
         # 优先使用全局引擎
@@ -316,7 +318,22 @@ class BaseAgent(SimBaseAgent):
                     f'直接以第一人称回复，不要说"作为[角色名]"或"我会说"这样的前缀。'
                     f"回复应该是流畅的中文，符合日常对话的语气和风格。"
                 )
-            
+
+            # 如果有对话历史，添加到system_prompt
+            if history and len(history) > 0:
+                history_text = "\n".join([f"{h['speaker']}: {h['content']}" for h in history])
+                system_prompt += f"\n\n## 最近对话历史\n{history_text}\n\n请结合对话历史，保持话题连贯性，以自然的方式继续对话。"
+
+            # 添加对话自然度指导
+            system_prompt += """
+## 对话风格要求
+- 真实的日常对话应该有自然的打断、重申、疑问
+- 不要每句话都太长或太正式
+- 可以使用口语化表达，如"嗯"、"其实"、"怎么说呢"、"这个嘛"
+- 对话应该像真实的人际交流，有起承转合
+- 可以反问、追问、表达疑惑
+"""
+
             # 根据MBTI和心情调整回复风格
             mbti_mood_prompt = self._get_response_style_by_mood()
             if mbti_mood_prompt:
@@ -407,7 +424,56 @@ class BaseAgent(SimBaseAgent):
                 style_prompt += "\n- 你喜欢保持灵活性和选择开放，回复可能会保留多种可能性。"
         
         return style_prompt
-    
+
+    def _should_conversation_end(self, conversation_history: List[Dict]) -> bool:
+        """判断对话是否应该结束（供外部调用）
+
+        Args:
+            conversation_history: 对话历史列表
+
+        Returns:
+            bool: 对话是否应该结束
+        """
+        return self.should_conversation_end(conversation_history)
+
+    def should_conversation_end(self, conversation_history: List[Dict]) -> bool:
+        """判断对话是否应该结束
+
+        Args:
+            conversation_history: 对话历史列表 [{"speaker": "张三", "content": "你好"}]
+
+        Returns:
+            bool: 对话是否应该结束
+        """
+        if len(conversation_history) < 2:
+            return False
+
+        try:
+            # 最近3轮对话
+            recent = conversation_history[-3:]
+            history_text = "\n".join([f"{h['speaker']}：{h['content']}" for h in recent])
+
+            prompt = f"""判断以下对话是否已经自然结束：
+
+{history_text}
+
+如果对话中的话题已经得到充分讨论，或者双方已经说再见/告别语，回答"是"。
+如果对话仍在进行中或有继续讨论的空间，回答"否"。
+
+回答格式：只需要回答"是"或"否"。"""
+
+            llm_engine = self._get_llm_engine()
+            if hasattr(llm_engine, 'generate'):
+                response = llm_engine.generate(prompt)
+            else:
+                response = ""
+
+            return "是" in response
+
+        except Exception as e:
+            print(f"判断对话结束出错: {e}")
+            return False
+
     def sleep(self):
         """智能体睡眠，恢复部分属性，评估睡眠质量"""
         # 获取今天短期记忆和当前心情，用于评估睡眠质量
@@ -652,7 +718,7 @@ class BaseAgent(SimBaseAgent):
 5. 特别的新信息或洞察
 6. 与我的终极目标({self.ultimate_goal})相关的进展
 
-对于你({self.name})这样一个{self.background['gender']}性、{self.background['age']}岁{self.background['occupation']}，具有{self.mbti}性格特质的人，请从上述经历中提取3-5条最重要的记忆，并进行简短总结。
+对于你({self.name})这样一个{self.gender or self.background.get('gender', '未知')}性、{self.age or self.background.get('age', 25)}岁{self.background.get('occupation', '未知职业')}，具有{self.mbti}性格特质的人，请从上述经历中提取3-5条最重要的记忆，并进行简短总结。
 
 按重要性排序输出，每条总结使用一段简洁的文字（30-50字），确保包含相关的时间、地点、人物和事件。特别关注那些有助于实现终极目标({self.ultimate_goal})的经历。
 
@@ -1329,9 +1395,9 @@ class BaseAgent(SimBaseAgent):
 
 角色信息:
 - 姓名: {self.name}
-- 性别: {self.background['gender']}
-- 年龄: {self.background['age']}岁
-- 职业: {self.background['occupation']}
+- 性别: {self.gender or self.background.get('gender', '未知')}
+- 年龄: {self.age or self.background.get('age', 25)}岁
+- 职业: {self.background.get('occupation', '未知职业')}
 - MBTI: {self.mbti}
 
 描述要求:
@@ -1365,7 +1431,8 @@ class BaseAgent(SimBaseAgent):
             
     def _get_default_appearance_descriptions(self) -> List[str]:
         """获取默认的外貌描述列表"""
-        if self.background['gender'] == "男":
+        gender = self.gender or self.background.get('gender', '未知')
+        if gender == "男":
             return [
                 f"{self.name}身材{random.choice(['高大', '中等', '偏瘦'])}，{random.choice(['浓眉大眼', '五官端正', '眉清目秀'])}，{random.choice(['短发利落', '头发略长但整齐', '寸头干练'])}，穿着{random.choice(['简洁大方', '休闲随意', '正式得体'])}，给人{random.choice(['可靠', '亲切', '严肃', '专业'])}的印象。",
                 f"一位{random.choice(['英俊', '普通', '朴实'])}的{self.background['age']}岁男性，{random.choice(['肤色健康', '肤色偏白', '肤色小麦色'])}，{random.choice(['戴着眼镜', '眼神专注', '目光炯炯'])}，穿着符合{self.background['occupation']}身份的{random.choice(['正装', '休闲服', '职业装'])}。",
@@ -1495,7 +1562,7 @@ class BaseAgent(SimBaseAgent):
         completion_rate = int((completed_plans + 0.5 * partially_completed_plans) / total_plans * 100)
         
         # 构建提示
-        prompt = f"""作为{self.name}，一个{self.background['gender']}性{self.background['age']}岁{self.background['occupation']}，MBTI性格类型为{self.mbti}，我需要对今天的计划完成情况进行反思。
+        prompt = f"""作为{self.name}，一个{self.gender or self.background.get('gender', '未知')}性{self.age or self.background.get('age', 25)}岁{self.background.get('occupation', '未知职业')}，MBTI性格类型为{self.mbti}，我需要对今天的计划完成情况进行反思。
 
 今天的计划完成情况:
 - 总计划数: {total_plans}
@@ -1594,14 +1661,16 @@ class BaseAgent(SimBaseAgent):
             locations_text += f"- {loc}: {desc}\n"
             
         # 构建提示，用于生成计划
-        prompt = f"""作为{self.name}，一个{self.background['gender']}性{self.background['age']}岁{self.background['occupation']}，MBTI性格类型为{self.mbti}，我需要根据我的背景和记忆制定今天的活动计划。
+        gender = self.gender or self.background.get('gender', '未知')
+        age = self.age or self.background.get('age', 25)
+        prompt = f"""作为{self.name}，一个{gender}性{age}岁{self.background.get('occupation', '未知职业')}，MBTI性格类型为{self.mbti}，我需要根据我的背景和记忆制定今天的活动计划。
 
 我的背景信息:
-- 年龄: {self.background['age']}岁
-- 性别: {self.background['gender']}
-- 职业: {self.background['occupation']}
-- 教育水平: {self.background['education']}
-- 家乡: {self.background['hometown']}
+- 年龄: {age}岁
+- 性别: {gender}
+- 职业: {self.background.get('occupation', '未知职业')}
+- 教育水平: {self.background.get('education', '未知')}
+- 家乡: {self.background.get('hometown', '未知')}
 - 外貌: {self.appearance}
 - 终极目标: {self.ultimate_goal}
 
@@ -1644,16 +1713,17 @@ class BaseAgent(SimBaseAgent):
         
         # 使用LLM生成计划
         plan_text = self._generate_with_llm(prompt)
-        
-        # 尝试解析生成的JSON
-        try:
-            # 提取JSON部分（可能有其他文本）
-            json_start = plan_text.find('[')
-            json_end = plan_text.rfind(']') + 1
-            
-            if json_start >= 0 and json_end > json_start:
-                plan_json = plan_text[json_start:json_end]
-                daily_plan = json.loads(plan_json)
+
+        # 如果生成失败，使用默认计划
+        if plan_text:
+            try:
+                # 提取JSON部分（可能有其他文本）
+                json_start = plan_text.find('[')
+                json_end = plan_text.rfind(']') + 1
+
+                if json_start >= 0 and json_end > json_start:
+                    plan_json = plan_text[json_start:json_end]
+                    daily_plan = json.loads(plan_json)
                 
                 # 验证并清理计划
                 cleaned_plan = []
@@ -1731,9 +1801,10 @@ class BaseAgent(SimBaseAgent):
                 self.add_memory(plan_summary)
                 
                 return cleaned_plan
-            
-        except Exception as e:
-            print(f"{self.name}制定计划时出错: {e}")
+
+            except Exception as e:
+                print(f"{self.name}制定计划时出错: {e}")
+                # 如果解析失败，使用默认计划（代码会在后面执行）
             
         # 如果解析失败，创建一个简单的默认计划
         default_plan = []
