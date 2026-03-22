@@ -41,17 +41,6 @@ class DailyLifeScenario(BaseScenario):
         self.agent_locks = {}
         self.global_lock = threading.Lock()
 
-        # 快速测试模式的预设回复
-        self._mock_responses = [
-            "你好，很高兴见到你！",
-            "今天天气真不错啊。",
-            "最近工作怎么样？",
-            "中午一起去吃饭吗？",
-            "这个话题真有意思。",
-            "我同意你的看法。",
-            "不好意思，我还有事要先走了。再见！"
-        ]
-
     def setup(self) -> None:
         """初始化场景"""
         self.is_initialized = True

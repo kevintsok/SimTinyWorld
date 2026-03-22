@@ -914,11 +914,8 @@ class BaseAgent(SimBaseAgent):
     
     def _save_to_short_memory(self, content: str):
         """保存记忆到短期记忆文件，以纯文本格式"""
-        # 将记忆以纯文本格式追加到短期记忆文件末尾
         with open(self.shortterm_file, "a", encoding="utf-8") as f:
-            if os.path.getsize(self.shortterm_file) > 0:
-                f.write("\n")
-            f.write(content)
+            f.write("\n" + content)
             
         # 更新内存中的短期记忆
         self.short_term_memory.append(content)
@@ -953,11 +950,8 @@ class BaseAgent(SimBaseAgent):
             
     def _save_to_long_memory(self, content: str):
         """保存记忆到长期记忆文件，以纯文本格式"""
-        # 将记忆以纯文本格式追加到长期记忆文件末尾
         with open(self.longterm_file, "a", encoding="utf-8") as f:
-            if os.path.getsize(self.longterm_file) > 0:
-                f.write("\n")
-            f.write(content)
+            f.write("\n" + content)
     
     def query_memory(self, query: str) -> str:
         """为兼容性保留的方法，重定向到respone方法"""

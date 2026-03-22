@@ -160,9 +160,20 @@ class SimulationController:
         """保存Session"""
         self._save_current_session(session_id)
 
+    MAX_NOTIFICATIONS = 50  # 限制最大通知数量
+
     def _add_notification(self, content: str, duration: float = 2.5):
         """添加通知到场景视图"""
         if self.current_view == "scenario" and hasattr(self, 'scenario_view'):
+            # 清理已过期的通知
+            now = time.time()
+            self.scenario_view.event_notifications = [
+                n for n in self.scenario_view.event_notifications
+                if now - n["start_time"] < n["duration"]
+            ]
+            # 限制最大数量
+            if len(self.scenario_view.event_notifications) >= self.MAX_NOTIFICATIONS:
+                self.scenario_view.event_notifications = self.scenario_view.event_notifications[-self.MAX_NOTIFICATIONS:]
             self.scenario_view.event_notifications.append({
                 "content": content,
                 "start_time": time.time(),
