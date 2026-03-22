@@ -278,7 +278,7 @@ class BaseAgent(SimBaseAgent):
         
         return self.mood
     
-    def respone(self, query, system_prompt=None, history=None):
+    def response(self, query, system_prompt=None, history=None):
         """根据查询生成回复
         
         Args:
@@ -847,7 +847,7 @@ class BaseAgent(SimBaseAgent):
         Returns:
             str: 生成的回复
         """
-        return self.respone(prompt)
+        return self.response(prompt)
 
     def perceive(self, event) -> None:
         """感知事件

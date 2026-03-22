@@ -724,9 +724,16 @@ class DailyLifeScenario(BaseScenario):
                 # 调用LLM评估（如果智能体有这个方法）
                 if hasattr(agent, "_generate_with_llm"):
                     result = agent._generate_with_llm(prompt)
-                    # 解析JSON并更新（简化处理）
-                    # 实际实现需要完整的JSON解析
-                    pass
+                    # 使用agent的JSON提取方法解析结果
+                    wealth_data = agent._extract_json_from_response(result)
+                    if wealth_data and all(k in wealth_data for k in ["time_change", "social_change", "health_change", "mental_change", "money_change"]):
+                        # 应用财富变化
+                        for key in ["time", "social", "health", "mental"]:
+                            change_key = f"{key}_change"
+                            if change_key in wealth_data and key in agent.wealth:
+                                agent.wealth[key] = max(0, min(1, agent.wealth[key] + wealth_data[change_key]))
+                        if "money_change" in wealth_data and "money" in agent.wealth:
+                            agent.wealth["money"] = max(0, agent.wealth["money"] + wealth_data["money_change"])
             except Exception as e:
                 print(f"评估{agent.name}财富时出错: {e}")
 

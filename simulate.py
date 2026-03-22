@@ -118,7 +118,7 @@ def run_dialogue(agents, location, round_index, max_participants=4, logger=None)
         try:
             # 使用智能体专用锁保护对话生成
             with agent_locks[next_speaker.id]:
-                response = next_speaker.respone(query_for_agent)
+                response = next_speaker.response(query_for_agent)
         except Exception as e:
             error_msg = f"获取{next_speaker.name}的回复时出错: {e}"
             print(error_msg)
