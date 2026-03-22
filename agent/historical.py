@@ -319,8 +319,6 @@ def _create_agent_from_data(data: Dict, config: Dict = None) -> BaseAgent:
 
 def _generate_mock_historical_agent(name: str, era: str) -> str:
     """生成模拟的历史人物数据（用于mock模式）"""
-    import random
-
     mbti_list = ["INTJ", "INTP", "ENTJ", "ENFJ", "INFJ", "ENFP"]
     occupations = ["君主", "思想家", "将军", "政治家", "文人"]
     personalities = ["雄才大略", "深思熟虑", "果敢坚定", "仁爱宽厚"]
@@ -352,8 +350,6 @@ def _generate_mock_historical_agent(name: str, era: str) -> str:
 
 def _generate_mock_country(name: str, country_type: str) -> str:
     """生成模拟的国家数据（用于mock模式）"""
-    import random
-
     mbti_list = ["ENTJ", "ESTJ", "ESFJ", "ISFJ", "INFJ"]
     personalities = ["勤劳勇敢", "爱好和平", "团结奋进", "包容开放"]
 
