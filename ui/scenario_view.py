@@ -1468,15 +1468,11 @@ class ScenarioView:
         # 返回按钮
         return_rect = pygame.Rect(15, btn_y, 100, 35)
         if return_rect.collidepoint(pos):
-            if self.interface.on_return_to_menu:
-                self.interface.on_return_to_menu()
             return "return_to_menu"
 
         # 播放/暂停按钮
         pause_rect = pygame.Rect(135, btn_y, 80, 35)
         if pause_rect.collidepoint(pos):
-            if self.interface.on_simulation_control:
-                self.interface.on_simulation_control("toggle_pause", None)
             return "toggle_pause"
 
         # 速度按钮
@@ -1484,24 +1480,18 @@ class ScenarioView:
         for spd, label in [(1.0, "1x"), (2.0, "2x"), (4.0, "4x")]:
             spd_rect = pygame.Rect(speed_x, btn_y, 60, 35)
             if spd_rect.collidepoint(pos):
-                if self.interface.on_simulation_control:
-                    self.interface.on_simulation_control("speed", spd)
                 return f"speed:{spd}"
             speed_x += 70
 
         # 单步按钮
         step_rect = pygame.Rect(speed_x + 30, btn_y, 80, 35)
         if step_rect.collidepoint(pos):
-            if self.interface.on_simulation_control:
-                self.interface.on_simulation_control("step", None)
             return "step"
 
         # 结束今天按钮
         end_today_x = speed_x + 120  # step_x + 90 = (speed_x + 230) + 90
         end_today_rect = pygame.Rect(end_today_x, btn_y, 90, 35)
         if end_today_rect.collidepoint(pos):
-            if self.interface.on_simulation_control:
-                self.interface.on_simulation_control("end_day", None)
             return "end_day"
 
         # 保存Session按钮

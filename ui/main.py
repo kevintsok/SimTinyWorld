@@ -275,8 +275,22 @@ class SimulationController:
 
         if success:
             print(f"Session {session_id} 已保存")
+            # 显示保存成功提示
+            if self.current_view == "scenario" and hasattr(self, 'scenario_view'):
+                self.scenario_view.event_notifications.append({
+                    "content": f"✓ Session已保存",
+                    "start_time": time.time(),
+                    "duration": 2.5
+                })
         else:
             print(f"Session {session_id} 保存失败")
+            # 显示保存失败提示
+            if self.current_view == "scenario" and hasattr(self, 'scenario_view'):
+                self.scenario_view.event_notifications.append({
+                    "content": f"✗ Session保存失败",
+                    "start_time": time.time(),
+                    "duration": 2.5
+                })
 
         return success
 
