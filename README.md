@@ -6,6 +6,7 @@
   <img src="https://img.shields.io/badge/Python-3.8+-blue.svg" alt="Python">
   <img src="https://img.shields.io/badge/LLM-Qwen|OpenAI|DeepSeek-green.svg" alt="LLM">
   <img src="https://img.shields.io/badge/Memory-FAISS向量库-orange.svg" alt="FAISS">
+  <img src="https://img.shields.io/badge/Version-v0.1.0-blue.svg" alt="Version">
 </p>
 
 ---
@@ -45,6 +46,16 @@
 - **2D俯视角地图** — RPG游戏风格
 - **实时观察** — Agent移动、对话气泡、状态变化一目了然
 - **Agent详情面板** — MBTI、财富、记忆、心情全面展示
+
+### 💾 Session会话管理
+- **保存/恢复** — 随时保存模拟进度，随时恢复继续
+- **多会话并发** — 同时运行多个独立模拟，互不影响
+- **会话导入/导出** — 分享和备份你的模拟结果
+
+```bash
+# 在UI中管理Session
+python main.py  # 主界面 → Session按钮
+```
 
 ### 📜 JSON场景自定义
 用JSON文件定义任何场景，无需编程：
