@@ -8,11 +8,9 @@ Session Manager - 会话管理器
 import os
 import json
 import shutil
-import threading
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from typing import Dict, List, Optional, Any
-from pathlib import Path
 
 
 @dataclass
@@ -336,7 +334,7 @@ class SessionManager:
                 # 如果是文件路径，复制到父目录
                 target_dir = os.path.join(os.path.dirname(target_path), session_id)
 
-            shutil.copytree(session_path, target_dir)
+            shutil.copytree(session_path, target_dir, dirs_exist_ok=True)
             return True
 
         except Exception as e:
@@ -358,12 +356,7 @@ class SessionManager:
             return None
 
         try:
-            # 确定源会话目录
-            if os.path.isfile(source_path):
-                # 如果是文件，查找同名目录
-                source_session_dir = source_path.replace(".zip", "")
-            else:
-                source_session_dir = source_path
+            source_session_dir = source_path
 
             # 读取源元数据以获取名称
             metadata_path = os.path.join(source_session_dir, "metadata.json")
