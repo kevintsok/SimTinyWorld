@@ -943,8 +943,8 @@ class BaseAgent(SimBaseAgent):
             f.write("\n" + content)
     
     def query_memory(self, query: str) -> str:
-        """为兼容性保留的方法，重定向到respone方法"""
-        return self.respone(query)
+        """为兼容性保留的方法，重定向到response方法"""
+        return self.response(query)
 
     def save_identity(self, directory: str = "agent/history"):
         """保存智能体的身份信息到指定目录
