@@ -79,22 +79,16 @@ class Panel:
         if not self.visible:
             return
 
-        # 绘制背景
         pygame.draw.rect(surface, self.background_color, self.rect, border_radius=5)
-
-        # 绘制边框
         pygame.draw.rect(surface, self.border_color, self.rect, self.border_width, border_radius=5)
 
-        # 绘制标题栏
         if self.title:
             title_rect = pygame.Rect(self.rect.x, self.rect.y, self.rect.width, self.title_height)
             pygame.draw.rect(surface, (60, 64, 72), title_rect, border_radius=5)
-            # 只绘制标题栏底部圆角
             title_clip = pygame.Rect(self.rect.x, self.rect.y + self.title_height - 5,
                                       self.rect.width, 5)
             pygame.draw.rect(surface, (60, 64, 72), title_clip)
 
-            # 绘制标题文字
             title_surface = self.font.render(self.title, True, self.title_color)
             title_pos = (self.rect.x + 10, self.rect.y + 7)
             surface.blit(title_surface, title_pos)
@@ -126,7 +120,7 @@ class TextBox:
                     return True
                 else:
                     self.is_active = False
-                    return False  # 点击不在 rect 内，不处理
+                    return False
         elif event.type == pygame.KEYDOWN and self.is_active:
             if event.key == pygame.K_BACKSPACE:
                 self.text = self.text[:-1]
@@ -140,12 +134,10 @@ class TextBox:
 
     def draw(self, surface: pygame.Surface):
         """绘制文本框"""
-        # 绘制背景
         bg_color = self.active_color if self.is_active else self.background_color
         pygame.draw.rect(surface, bg_color, self.rect, border_radius=5)
         pygame.draw.rect(surface, self.border_color, self.rect, 2, border_radius=5)
 
-        # 绘制文本或占位符
         if self.text:
             text_surface = self.font.render(self.text, True, self.text_color)
         else:
@@ -154,7 +146,6 @@ class TextBox:
         text_rect = text_surface.get_rect(midleft=(self.rect.x + 10, self.rect.centery))
         surface.blit(text_surface, text_rect)
 
-        # 绘制光标
         if self.is_active and self.text:
             self.cursor_timer += 1
             if self.cursor_timer % 60 < 30:
@@ -183,17 +174,14 @@ class Dropdown:
         if event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1:
                 if self.is_open:
-                    # 检查是否点击了选项
                     option_rects = self._get_option_rects()
                     for i, opt_rect in enumerate(option_rects):
                         if opt_rect.collidepoint(event.pos):
                             self.selected_index = i
                             self.is_open = False
                             return True
-                    # 点击其他地方关闭
                     self.is_open = False
                 else:
-                    # 打开下拉框
                     if self.rect.collidepoint(event.pos):
                         self.is_open = True
                         return True
@@ -221,24 +209,20 @@ class Dropdown:
 
     def draw(self, surface: pygame.Surface):
         """绘制下拉框"""
-        # 绘制主框
         pygame.draw.rect(surface, self.background_color, self.rect, border_radius=5)
         pygame.draw.rect(surface, (80, 84, 92), self.rect, 2, border_radius=5)
 
-        # 绘制选中项
         text = self.options[self.selected_index] if self.options else ""
         text_surface = self.font.render(text, True, self.text_color)
         text_rect = text_surface.get_rect(midleft=(self.rect.x + 10, self.rect.centery))
         surface.blit(text_surface, text_rect)
 
-        # 绘制下拉箭头
         arrow_x = self.rect.right - 20
         arrow_y = self.rect.centery
         pygame.draw.polygon(surface, self.text_color,
                            [(arrow_x, arrow_y - 5), (arrow_x + 8, arrow_y - 5),
                             (arrow_x + 4, arrow_y + 5)])
 
-        # 绘制选项列表
         if self.is_open:
             option_rects = self._get_option_rects()
             for i, (option, opt_rect) in enumerate(zip(self.options, option_rects)):
