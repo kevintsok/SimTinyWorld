@@ -1,0 +1,866 @@
+"""
+UI Main Entry Point - Arcade版本
+
+使用arcade库的多智能体社会模拟UI主入口。
+集成MainView（主界面）和ScenarioView（场景视图），
+管理两者之间的切换和数据流动。支持多Session管理。
+"""
+
+import arcade
+import sys
+import os
+import argparse
+import time
+import random
+import threading
+from typing import Dict, List, Optional, Any, Tuple
+from queue import Queue, Empty
+
+# 添加项目根目录到路径
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from arcade_ui.main_view import MainView, MainViewInterface
+from environment.world import World
+from agent.base_agent import BaseAgent
+from session import SessionManager
+from simulation.scenarios.daily_life import DailyLifeScenario
+from llm_engine.factory import get_global_engine, has_global_engine
+
+
+# 尝试导入ScenarioView，如果不存在则创建占位符
+try:
+    from arcade_ui.scenario_view import ScenarioView, ScenarioViewInterface
+except ImportError:
+    # ScenarioView占位符 - 当scenario_view.py实现后可以移除
+    from dataclasses import dataclass
+    from typing import Callable, Any
+
+    @dataclass
+    class ScenarioViewInterface:
+        """场景视图回调接口"""
+        on_agent_selected: Callable[[str], None] = None
+        on_agent_detail_toggle: Callable[[bool], None] = None
+        on_return_to_menu: Callable[[], None] = None
+        on_simulation_control: Callable[[str, Any], None] = None
+        on_save_session: Callable[[], bool] = None
+        on_load_session: Callable[[], None] = None
+
+    class ScenarioView:
+        """ScenarioView占位符 - 需要实现完整版本"""
+        def __init__(self, width: int, height: int, interface, window=None):
+            self.width = width
+            self.height = height
+            self.interface = interface
+            self.window = window
+            self.agents: Dict = {}
+            self.locations: Dict = {}
+            self.connections: Dict = {}
+            self.dialogs: List = []
+            self.scenario_name = "智能体模拟"
+            self.scenario_type = "daily_life"
+            self.current_day = 1
+            self.current_round = 1
+            self.interact_rounds = 5
+            self.total_dialogue_count = 0
+            self.loading_text = ""
+            self.event_notifications: List[Dict] = []
+            self.is_paused = True
+            self.speed = 1.0
+            self.selected_agent_id: Optional[str] = None
+            self.location_positions: Dict[str, Tuple[float, float]] = {}
+            self.agent_info: Dict[str, Dict] = {}
+
+        def set_locations(self, locations: Dict, connections: Dict):
+            self.locations = locations
+            self.connections = connections
+            self._calculate_location_positions()
+
+        def _calculate_location_positions(self):
+            """计算位置的视觉坐标"""
+            if not hasattr(self, 'locations') or not self.locations:
+                return
+            map_x = 250 + 20
+            map_y = 150 + 20
+            map_width = self.width - 250 - 300 - 40
+            map_height = self.height - 80 - 150 - 80
+            count = len(self.locations)
+            if count == 0:
+                return
+            cols = max(1, int(map_width / 120))
+            for i, loc_name in enumerate(self.locations.keys()):
+                col = i % cols
+                row = i // cols
+                x = map_x + col * 120 + 50
+                y = map_y + map_height - row * 80 - 40
+                self.location_positions[loc_name] = (x, y)
+
+        def set_scenario_info(self, name: str, scenario_type: str = "daily_life"):
+            self.scenario_name = name
+            self.scenario_type = scenario_type
+
+        def add_agent(self, agent_id: str, name: str, mbti: str, location: str,
+                      mood_value: float = 0.0, wealth: Dict = None,
+                      long_term_memory_count: int = 0, short_term_memory_count: int = 0,
+                      short_term_memories: List[str] = None, long_term_memories: List[str] = None,
+                      recent_memories: List[str] = None):
+            self.agents[agent_id] = {
+                "name": name, "mbti": mbti, "location": location,
+                "mood_value": mood_value, "wealth": wealth or {},
+                "long_term_memory_count": long_term_memory_count,
+                "short_term_memory_count": short_term_memory_count,
+                "short_term_memories": short_term_memories or [],
+                "long_term_memories": long_term_memories or [],
+                "recent_memories": recent_memories or []
+            }
+            self.agent_info[agent_id] = {
+                "name": name, "mbti": mbti, "location": location,
+                "mood": mood_value, "wealth": wealth or 0
+            }
+
+        def update_agent_info(self, agent_id: str, **kwargs):
+            if agent_id in self.agents:
+                self.agents[agent_id].update(kwargs)
+            if agent_id in self.agent_info:
+                self.agent_info[agent_id].update(kwargs)
+
+        def show_dialog(self, agent_id: str, text: str, duration: float = 3.0):
+            pass
+
+        def move_agent(self, agent_id: str, from_location: str, to_location: str, duration: float = 1.0):
+            if agent_id in self.agent_info:
+                self.agent_info[agent_id]["location"] = to_location
+
+        def set_interact_rounds(self, rounds: int):
+            self.interact_rounds = rounds
+
+        def set_day(self, day: int):
+            self.current_day = day
+
+        def set_round(self, round_num: int):
+            self.current_round = round_num
+
+        def set_total_dialogue_count(self, count: int):
+            self.total_dialogue_count = count
+
+        def set_loading_text(self, text: str):
+            self.loading_text = text
+
+        def clear_loading_text(self):
+            self.loading_text = ""
+
+        def get_interact_rounds(self) -> int:
+            return self.interact_rounds
+
+        def update(self):
+            pass
+
+        def handle_event(self, event) -> Optional[str]:
+            return None
+
+        def to_dict(self) -> Dict[str, Any]:
+            return {}
+
+        def from_dict(self, data: Dict[str, Any]):
+            pass
+
+        def on_draw(self):
+            """绘制视图"""
+            arcade.set_background_color((30, 33, 40))
+            arcade.start_render()
+
+            # 绘制标题
+            arcade.draw_text(
+                self.scenario_name,
+                self.width // 2,
+                self.height - 40,
+                arcade.color.WHITE,
+                24,
+                anchor_x="center", anchor_y="center"
+            )
+
+            # 绘制统计信息
+            stats = f"第{self.current_day}天 | 轮数:{self.current_round}/{self.interact_rounds} | 对话:{self.total_dialogue_count} | 智能体:{len(self.agents)}"
+            arcade.draw_text(
+                stats,
+                self.width // 2,
+                self.height - 70,
+                arcade.color.GRAY,
+                14,
+                anchor_x="center", anchor_y="center"
+            )
+
+            # 绘制分隔线
+            arcade.draw_line(0, self.height - 80, self.width, self.height - 80, (60, 64, 72), 2)
+
+            # 绘制左侧面板 - 智能体列表
+            arcade.draw_rectangle_filled(125, self.height // 2 - 40, 250, self.height - 170, (40, 44, 52))
+            arcade.draw_rectangle_outline(125, self.height // 2 - 40, 250, self.height - 170, (60, 64, 72), 2)
+            arcade.draw_text("智能体列表", 15, self.height - 100, arcade.color.WHITE, 14, anchor_x="left")
+
+            # 绘制智能体列表
+            agent_y = self.height - 130
+            for i, (agent_id, info) in enumerate(list(self.agent_info.items())[:8]):
+                color = arcade.color.WHITE if agent_id != self.selected_agent_id else (100, 160, 210)
+                arcade.draw_text(
+                    f"{info.get('name', 'Agent')} ({info.get('mbti', '?')})",
+                    15, agent_y - i * 25,
+                    color, 12, anchor_x="left"
+                )
+
+            # 绘制右侧面板 - 智能体详情
+            arcade.draw_rectangle_filled(self.width - 150, self.height // 2 - 40, 300, self.height - 170, (40, 44, 52))
+            arcade.draw_rectangle_outline(self.width - 150, self.height // 2 - 40, 300, self.height - 170, (60, 64, 72), 2)
+            arcade.draw_text("智能体详情", self.width - 285, self.height - 100, arcade.color.WHITE, 14, anchor_x="left")
+
+            if self.selected_agent_id and self.selected_agent_id in self.agent_info:
+                info = self.agent_info[self.selected_agent_id]
+                details_y = self.height - 130
+                details = [
+                    f"名称: {info.get('name', 'N/A')}",
+                    f"MBTI: {info.get('mbti', 'N/A')}",
+                    f"位置: {info.get('location', 'N/A')}",
+                    f"心情: {info.get('mood', 0):.1f}",
+                    f"财富: {info.get('wealth', 0):.0f}"
+                ]
+                for detail in details:
+                    arcade.draw_text(detail, self.width - 285, details_y - details.index(detail) * 22,
+                                  arcade.color.LIGHT_GRAY, 12, anchor_x="left")
+
+            # 绘制底部面板 - 世界地图
+            arcade.draw_rectangle_filled((250 + self.width - 300) // 2, 75, self.width - 550, 150, (40, 44, 52))
+            arcade.draw_rectangle_outline((250 + self.width - 300) // 2, 75, self.width - 550, 150, (60, 64, 72), 2)
+            arcade.draw_text("世界地图", 260, 130, arcade.color.WHITE, 14, anchor_x="left")
+
+            # 绘制位置
+            if hasattr(self, 'location_positions'):
+                for loc_name, (x, y) in self.location_positions.items():
+                    arcade.draw_rectangle_filled(x, y, 100, 50, (60, 64, 72))
+                    arcade.draw_rectangle_outline(x, y, 100, 50, (80, 84, 92), 2)
+                    arcade.draw_text(loc_name, x, y, arcade.color.WHITE, 12,
+                                    anchor_x="center", anchor_y="center")
+                    # 绘制此位置的智能体
+                    agents_here = [aid for aid, info in self.agent_info.items() if info.get("location") == loc_name]
+                    for i, aid in enumerate(agents_here[:3]):
+                        ax = x - 30 + i * 15
+                        ay = y - 35
+                        arcade.draw_circle_filled(ax, ay, 5, (100, 160, 210))
+
+            # 绘制控制栏
+            arcade.draw_rectangle_filled(self.width // 2, 20, self.width, 40, (35, 38, 45))
+            arcade.draw_line(0, self.height - 150, self.width, self.height - 150, (60, 64, 72), 2)
+
+            # 绘制提示
+            if not self.loading_text:
+                arcade.draw_text(
+                    "ScenarioView实现中 - 请等待完整实现",
+                    self.width // 2, 20,
+                    arcade.color.DARK_GRAY, 12,
+                    anchor_x="center", anchor_y="center"
+                )
+
+
+class SimulationController:
+    """模拟UI主控制器
+
+    集成MainView（主界面）和ScenarioView（场景视图），
+    管理两者之间的切换和数据流动。支持多Session管理。
+    """
+
+    def __init__(self, width: int = 1000, height: int = 700, fast_mode: bool = False):
+        """初始化UI
+
+        Args:
+            width: 窗口宽度
+            height: 窗口高度
+            fast_mode: 是否使用快速模式（不调用LLM）
+        """
+        # 创建arcade窗口
+        self.window = arcade.Window(width, height, "多智能体社会模拟")
+        self.width = width
+        self.height = height
+        self.fast_mode = fast_mode
+
+        # Session管理器
+        self.session_manager = SessionManager()
+        self.current_session_id: Optional[str] = None
+        self.current_session_name: str = "未命名Session"
+
+        # 创建主视图（带回调接口）
+        main_interface = MainViewInterface(
+            on_scenario_selected=self._on_scenario_selected,
+            on_agent_created=self._on_agent_created,
+            on_agent_imported=self._on_agent_imported,
+            on_quick_start=self._on_quick_start,
+            on_session_clicked=self._on_session_clicked
+        )
+        self.main_view = MainView(
+            self.window,
+            rect_x=0, rect_y=0,
+            rect_width=width, rect_height=height,
+            interface=main_interface
+        )
+
+        # 创建场景视图（带回调接口）
+        scenario_interface = ScenarioViewInterface(
+            on_agent_selected=self._on_agent_selected,
+            on_agent_detail_toggle=self._on_agent_detail_toggle,
+            on_return_to_menu=self._on_return_to_menu,
+            on_simulation_control=self._on_simulation_control,
+            on_save_session=self._on_save_session_in_scenario,
+            on_load_session=self._on_load_session_in_scenario
+        )
+        self.scenario_view = ScenarioView(width, height, scenario_interface, self.window)
+
+        # Session面板
+        self.session_panel_visible = False
+
+        # 状态
+        self.current_view = "main"  # main, scenario
+        self.is_paused = True
+        self.speed = 1.0
+        self.selected_agent_id: Optional[str] = None
+
+        # 模拟数据
+        self.agents: Dict[str, BaseAgent] = {}
+        self.name_to_id: Dict[str, str] = {}  # 名字到ID的快速映射
+        self.world: Optional[World] = None
+        self.custom_agents: List[Dict] = []  # 用户创建的智能体
+
+        # 时钟
+        self.last_step_time = 0
+        self.step_interval = 2.0  # 秒
+
+        # 每日交互轮数状态
+        self.current_day = 1
+        self.interact_rounds_per_day = 5  # 默认每日5轮交互
+        self.current_interact_round = 0
+        self.total_dialogue_count = 0  # 累计对话次数
+
+        # 当前场景类型
+        self.scenario_type = "daily_life"
+
+        # DailyLifeScenario实例
+        self.scenario: Optional[DailyLifeScenario] = None
+
+        # 异步模拟步进支持
+        self.step_result_queue: Queue = Queue()
+        self.is_step_running: bool = False
+        self._step_thread: Optional[threading.Thread] = None
+
+        # 模拟步数计数器
+        self.current_step = 0
+
+        # 设置窗口的更新和绘制回调
+        self.window.on_update = self.on_update
+        self.window.on_draw = self.on_draw
+        self.window.on_mouse_motion = self.on_mouse_motion
+        self.window.on_mouse_press = self.on_mouse_press
+        self.window.on_key_press = self.on_key_press
+        self.window.on_key_release = self.on_key_release
+
+        # 追踪鼠标位置
+        self.mouse_x = 0
+        self.mouse_y = 0
+        self.mouse_pressed = False
+
+    # ==================== 回调方法 ====================
+
+    def _on_scenario_selected(self, scenario_id: str, config: dict):
+        """场景被选中"""
+        print(f"场景选中: {scenario_id}, 配置: {config}")
+
+    def _on_agent_created(self, agent_data: dict):
+        """创建智能体"""
+        self.custom_agents.append(agent_data)
+        print(f"智能体创建: {agent_data.get('name')}")
+
+    def _on_agent_imported(self, agent_data: dict):
+        """导入智能体"""
+        print(f"智能体导入: {agent_data}")
+
+    def _on_quick_start(self, config: dict):
+        """快速开始"""
+        self._start_simulation(config)
+
+    def _on_session_clicked(self):
+        """Session按钮点击"""
+        print("Session面板点击")
+        self.session_panel_visible = True
+
+    def _on_agent_selected(self, agent_id: str):
+        """智能体被选中"""
+        self.selected_agent_id = agent_id
+        print(f"智能体选中: {agent_id}")
+
+    def _on_agent_detail_toggle(self, visible: bool):
+        """详情显示状态变化"""
+        print(f"详情显示: {visible}")
+
+    def _on_return_to_menu(self):
+        """返回主菜单"""
+        self.current_view = "main"
+        self.window.set_caption("多智能体社会模拟")
+        print("返回主菜单")
+
+    def _on_simulation_control(self, control_type: str, value: Any):
+        """模拟控制"""
+        if control_type == "toggle_pause":
+            self.is_paused = not self.is_paused
+        elif control_type == "speed":
+            self.speed = value
+        elif control_type == "step":
+            self._simulate_step()
+
+    def _on_save_session_in_scenario(self):
+        """在仿真场景中保存Session"""
+        self.save_current_session()
+
+    def _on_load_session_in_scenario(self):
+        """在仿真场景中加载Session"""
+        print("加载Session")
+
+    # ==================== 事件处理 ====================
+
+    def on_mouse_motion(self, x: float, y: float, dx: float, dy: float):
+        """处理鼠标移动事件"""
+        self.mouse_x = x
+        self.mouse_y = y
+        if self.current_view == "main":
+            self.main_view.on_mouse_motion(x, y, dx, dy)
+
+    def on_mouse_press(self, x: float, y: float, button: int, modifiers: int):
+        """处理鼠标点击事件"""
+        self.mouse_pressed = True
+        if self.current_view == "main":
+            self.main_view.on_mouse_press(x, y, button, modifiers)
+        elif self.current_view == "scenario":
+            action = self.scenario_view.handle_event({
+                "type": "mouse_press",
+                "x": x, "y": y, "button": button
+            })
+            self._handle_action(action)
+        self.mouse_pressed = False
+
+    def on_key_press(self, symbol: int, modifiers: int):
+        """处理键盘按下事件"""
+        if self.current_view == "scenario":
+            if symbol == arcade.key.ESCAPE:
+                if self.session_panel_visible:
+                    self.session_panel_visible = False
+                else:
+                    self.current_view = "main"
+                    self.window.set_caption("多智能体社会模拟")
+            elif symbol == arcade.key.SPACE:
+                self.is_paused = not self.is_paused
+            elif symbol == arcade.key.KEY_1:
+                self.speed = 1.0
+            elif symbol == arcade.key.KEY_2:
+                self.speed = 2.0
+            elif symbol == arcade.key.KEY_3:
+                self.speed = 4.0
+            elif symbol == arcade.key.S:
+                if modifiers & arcade.key.MOD_CTRL:
+                    self.save_current_session()
+                else:
+                    self._simulate_step()
+
+    def on_key_release(self, symbol: int, modifiers: int):
+        """处理键盘释放事件"""
+        pass
+
+    def _handle_action(self, action):
+        """处理动作"""
+        if action is None:
+            return
+
+        if action == "return_to_menu":
+            self.current_view = "main"
+            self.window.set_caption("多智能体社会模拟")
+            return
+
+        if action == "toggle_pause":
+            self.is_paused = not self.is_paused
+        elif action and action.startswith("speed:"):
+            speed_str = action.split(":")[1]
+            self.speed = float(speed_str)
+        elif action == "step":
+            self._simulate_step()
+        elif action and action.startswith("select:"):
+            agent_id = action.split(":")[1]
+            self.selected_agent_id = agent_id
+
+    # ==================== 更新和绘制 ====================
+
+    def on_update(self, delta_time: float):
+        """更新逻辑"""
+        if self.current_view == "scenario":
+            self._process_step_results()
+
+            if not self.is_paused:
+                current_time = time.time()
+                adjusted_interval = self.step_interval / self.speed
+                if current_time - self.last_step_time >= adjusted_interval:
+                    self._simulate_step()
+                    self.last_step_time = current_time
+
+            self.scenario_view.update()
+
+    def on_draw(self):
+        """绘制"""
+        arcade.start_render()
+
+        if self.current_view == "main":
+            self.main_view.draw()
+        elif self.current_view == "scenario":
+            self.scenario_view.on_draw()
+
+    # ==================== 模拟控制 ====================
+
+    def _start_simulation(self, config: dict):
+        """开始模拟"""
+        self.current_view = "scenario"
+
+        if not has_global_engine():
+            get_global_engine("qwen", mock_mode=self.fast_mode)
+
+        self.scenario_type = config.get("scenario_type", "daily_life")
+
+        location_count = config.get("locations", 5)
+        self.world = World(visual_mode=False, location_count=location_count)
+
+        if self.scenario_type == "daily_life":
+            scenario_config = {
+                "fast_mode": self.fast_mode,
+                "rounds_per_day": config.get("interact_rounds", 5)
+            }
+            self.scenario = DailyLifeScenario(config=scenario_config)
+            self.scenario.world = self.world
+            self.scenario.setup()
+            self.scenario.rounds_per_day = config.get("interact_rounds", 5)
+        else:
+            self.scenario = None
+
+        locations = {}
+        for name, info in self.world.layout.locations.items():
+            pos = self.world.layout.positions.get(name, (0, 0))
+            locations[name] = {
+                "type": info.get("type", "默认"),
+                "description": info.get("description", ""),
+                "position": pos
+            }
+
+        connections = {}
+        for loc_name, loc in self.world.locations.items():
+            connections[loc_name] = [
+                (conn, self.world.layout.get_distance(loc_name, conn))
+                for conn in loc.connected_locations
+            ]
+
+        self.scenario_view.set_locations(locations, connections)
+
+        scenario_name_map = {
+            "daily_life": "日常生活",
+            "emergency": "突发事件",
+            "debate": "观点辩论"
+        }
+        self.scenario_view.set_scenario_info(
+            name=scenario_name_map.get(self.scenario_type, "智能体模拟"),
+            scenario_type=self.scenario_type
+        )
+
+        agent_count = config.get("num_agents", 5)
+        custom_agents = config.get("custom_agents", [])
+
+        for agent_data in custom_agents:
+            self._create_agent_from_data(agent_data)
+
+        existing_count = len(self.agents)
+        for i in range(agent_count - existing_count):
+            self._create_random_agent(f"agent_{i+1}")
+
+        self._update_scenario_view()
+
+        self.interact_rounds_per_day = config.get("interact_rounds", 5)
+        self.scenario_view.set_interact_rounds(self.interact_rounds_per_day)
+
+        self.current_day = 1
+        self.current_interact_round = 0
+        self.total_dialogue_count = 0
+        self.scenario_view.set_day(1)
+        self.scenario_view.set_round(1)
+        self.scenario_view.set_total_dialogue_count(0)
+
+        self.is_paused = False
+        self.window.set_caption(f"多智能体社会模拟 - {scenario_name_map.get(self.scenario_type, '智能体模拟')}")
+
+    def _create_random_agent(self, agent_id: str):
+        """创建随机智能体"""
+        names = ["小明", "小红", "小华", "小李", "小张", "小王", "小刘", "小陈",
+                 "Alice", "Bob", "Charlie", "Diana", "Eve", "Frank", "Grace", "Henry"]
+        mbtis = ["INTJ", "INTP", "ENTJ", "ENTP", "INFJ", "INFP", "ENFJ", "ENFP",
+                 "ISTJ", "ISTP", "ESTJ", "ESTP", "ISFJ", "ISFP", "ESFJ", "ESFP"]
+        genders = ["男", "女"]
+        occupations = ["学生", "教师", "工程师", "医生", "设计师", "艺术家"]
+        backgrounds = [
+            "热爱生活，喜欢探索新事物",
+            "工作认真负责，追求完美",
+            "善于社交，人缘很好",
+            "内向安静，喜欢独立思考",
+            "充满活力，喜欢冒险"
+        ]
+
+        name = random.choice(names)
+        mbti = random.choice(mbtis)
+        gender = random.choice(genders)
+        occupation = random.choice(occupations)
+        age = random.randint(18, 50)
+        background = random.choice(backgrounds)
+
+        agent = BaseAgent(
+            id=agent_id,
+            name=name,
+            mbti=mbti,
+            gender=gender,
+            age=age,
+            background={
+                "occupation": occupation,
+                "education": "本科",
+                "hometown": "北京",
+                "description": background
+            },
+            appearance=f"{name}是一位{age}岁的{occupation}，{background}",
+            skip_llm_init=True
+        )
+
+        if self.world:
+            self.world.add_agent(agent_id, agent)
+
+        self.agents[agent_id] = agent
+        self.name_to_id[agent.name] = agent_id
+        return agent
+
+    def _create_agent_from_data(self, agent_data: dict):
+        """从数据创建智能体"""
+        import uuid
+        agent_id = str(uuid.uuid4())[:8]
+
+        bg_text = agent_data.get("background", agent_data.get("occupation", ""))
+
+        agent = BaseAgent(
+            id=agent_id,
+            name=agent_data["name"],
+            mbti=agent_data.get("mbti", "ENFP"),
+            gender=agent_data.get("gender", "男"),
+            age=int(agent_data.get("age", 25)),
+            background={
+                "occupation": agent_data.get("occupation", "未知"),
+                "education": "本科",
+                "hometown": "未知",
+                "description": bg_text
+            },
+            appearance=f"{agent_data['name']}是一位{agent_data.get('age', 25)}岁",
+            skip_llm_init=True
+        )
+
+        if self.world:
+            self.world.add_agent(agent_id, agent)
+
+        self.agents[agent_id] = agent
+        self.name_to_id[agent.name] = agent_id
+        return agent
+
+    def _update_scenario_view(self):
+        """更新场景视图"""
+        if not self.world:
+            return
+
+        for agent_id, agent in self.agents.items():
+            location = self.world.get_agent_location(agent_id) if self.world else None
+            if location:
+                long_term_memories = getattr(agent, 'long_term_memory', []) or []
+                short_term_memories = getattr(agent, 'short_term_memory', []) or []
+                recent_memories = short_term_memories[-3:] if short_term_memories else []
+
+                self.scenario_view.add_agent(
+                    agent_id=agent_id,
+                    name=agent.name,
+                    mbti=agent.mbti,
+                    location=location,
+                    mood_value=agent.mood.get("value", 0.0) if hasattr(agent, 'mood') else 0.0,
+                    wealth=agent.wealth if hasattr(agent, 'wealth') else {},
+                    long_term_memory_count=len(long_term_memories),
+                    short_term_memory_count=len(short_term_memories),
+                    short_term_memories=short_term_memories[-10:],
+                    long_term_memories=long_term_memories[-10:],
+                    recent_memories=recent_memories
+                )
+
+    def _simulate_step(self):
+        """执行一步模拟（异步版本，不阻塞UI）"""
+        if not self.world or not self.agents:
+            return
+
+        if self.is_step_running:
+            return
+
+        self.is_step_running = True
+        self._step_thread = threading.Thread(
+            target=self._simulate_step_worker,
+            args=(),
+            daemon=True
+        )
+        self._step_thread.start()
+
+    def _simulate_step_worker(self):
+        """后台线程执行模拟步骤"""
+        try:
+            if self.scenario:
+                step = self.current_step + 1
+                step_result = self.scenario.step(self.agents, self.world, step)
+                self.step_result_queue.put(("scenario", step_result, step))
+            else:
+                movements = []
+                for agent_id, agent in list(self.agents.items()):
+                    if random.random() < 0.3:
+                        current_loc = self.world.get_agent_location(agent_id)
+                        if current_loc:
+                            connected = self.world.get_connected_locations(current_loc)
+                            if connected:
+                                new_loc = random.choice(connected)
+                                self.world.move_agent(agent, current_loc, new_loc)
+                                movements.append((agent_id, current_loc, new_loc))
+                self.step_result_queue.put(("simple", movements, None))
+        except Exception as e:
+            print(f"模拟步骤执行出错: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            self.is_step_running = False
+
+    def _process_step_results(self):
+        """在主循环中处理模拟步骤结果（不阻塞）"""
+        try:
+            while True:
+                result = self.step_result_queue.get_nowait()
+                result_type, data, step = result
+
+                if result_type == "scenario":
+                    self.current_step = step
+
+                    dialogues = data.get("dialogues", [])
+                    for dialogue in dialogues:
+                        lines = dialogue.get("lines", [])
+                        for line in lines:
+                            speaker_name = line.get("speaker", "")
+                            content = line.get("content", "")
+                            agent_id = self.name_to_id.get(speaker_name)
+                            if agent_id and agent_id in self.agents:
+                                self.scenario_view.show_dialog(agent_id, content, duration=3.0)
+
+                    self._sync_agent_memory_counts()
+
+                    self.current_interact_round += 1
+                    self.scenario_view.set_round(self.current_interact_round)
+                    self.scenario_view.set_total_dialogue_count(self.total_dialogue_count)
+
+                elif result_type == "simple":
+                    for agent_id, from_loc, to_loc in data:
+                        self.scenario_view.move_agent(agent_id, from_loc, to_loc, duration=1.0)
+
+        except Empty:
+            pass
+
+    def _sync_agent_memory_counts(self):
+        """同步智能体记忆数量到UI"""
+        for agent_id, agent in self.agents.items():
+            long_term_count = len(getattr(agent, 'long_term_memory', []) or [])
+            short_term_count = len(getattr(agent, 'short_term_memory', []) or [])
+            recent_memories = getattr(agent, 'short_term_memory', [])[-3:] if hasattr(agent, 'short_term_memory') else []
+            long_term_memories = getattr(agent, 'long_term_memory', []) or []
+            short_term_memories = getattr(agent, 'short_term_memory', []) or []
+
+            self.scenario_view.update_agent_info(
+                agent_id,
+                long_term_memory_count=long_term_count,
+                short_term_memory_count=short_term_count,
+                short_term_memories=short_term_memories[-10:],
+                long_term_memories=long_term_memories[-10:],
+                recent_memories=recent_memories
+            )
+
+    # ==================== Session管理 ====================
+
+    def save_current_session(self) -> bool:
+        """保存当前Session"""
+        if not self.current_session_id:
+            self.current_session_id = self.session_manager.create_session(
+                name=self.current_session_name,
+                description="",
+                scenario_type=self.scenario_type
+            )
+
+        return self._save_current_session(self.current_session_id)
+
+    def _save_current_session(self, session_id: str) -> bool:
+        """保存指定Session"""
+        world_state = self.world.to_dict() if self.world else {}
+        scenario_state = self.scenario_view.to_dict()
+        controller_state = self._to_dict()
+
+        agents_data = {}
+        for agent_id, agent in self.agents.items():
+            agents_data[agent_id] = agent.to_dict()
+
+        success = self.session_manager.save_session(
+            session_id=session_id,
+            engine_state={},
+            world_state=world_state,
+            scenario_state=scenario_state,
+            controller_state=controller_state,
+            agents_data=agents_data
+        )
+
+        if success:
+            print(f"Session {session_id} 已保存")
+        else:
+            print(f"Session {session_id} 保存失败")
+
+        return success
+
+    def _to_dict(self) -> Dict[str, Any]:
+        """将UI状态序列化为字典"""
+        return {
+            "current_view": self.current_view,
+            "current_day": self.current_day,
+            "interact_rounds_per_day": self.interact_rounds_per_day,
+            "current_interact_round": self.current_interact_round,
+            "total_dialogue_count": self.total_dialogue_count,
+            "is_paused": self.is_paused,
+            "speed": self.speed,
+            "selected_agent_id": self.selected_agent_id,
+            "custom_agents": self.custom_agents,
+            "scenario_type": self.scenario_type,
+            "current_session_id": self.current_session_id,
+            "current_session_name": self.current_session_name,
+        }
+
+
+def main():
+    """主函数"""
+    parser = argparse.ArgumentParser(description="多智能体社会模拟 - Arcade UI")
+    parser.add_argument("--width", type=int, default=1000, help="窗口宽度")
+    parser.add_argument("--height", type=int, default=700, help="窗口高度")
+    parser.add_argument("--fast", action="store_true", help="快速模式（不调用LLM）")
+
+    args = parser.parse_args()
+
+    controller = SimulationController(
+        width=args.width,
+        height=args.height,
+        fast_mode=args.fast
+    )
+    arcade.run()
+
+
+if __name__ == "__main__":
+    main()
