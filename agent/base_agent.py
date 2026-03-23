@@ -62,7 +62,7 @@ class LLMEngineEmbeddings(Embeddings):
 class BaseAgent(SimBaseAgent):
     def __init__(self, id=None, name=None, gender=None, age=None, mbti=None,
                  background=None, appearance=None, vector_store_dir=None,
-                 init_wealth=None, engine=None):
+                 init_wealth=None, engine=None, skip_llm_init=False):
         """初始化智能体
 
         Args:
@@ -76,6 +76,7 @@ class BaseAgent(SimBaseAgent):
             vector_store_dir: 向量存储目录
             init_wealth: 初始财富
             engine: LLM引擎
+            skip_llm_init: 是否跳过LLM初始化（用于UI快速启动）
         """
         super().__init__(id or str(uuid.uuid4()), name or "Unknown")
 
@@ -99,16 +100,17 @@ class BaseAgent(SimBaseAgent):
             self.llm_engine = get_global_engine()
         else:
             self.llm_engine = EngineVerifier().get_first_available_engine()
-        
+
         if init_wealth:
             self.wealth = init_wealth
         else:
             if self.background and self.appearance and self.name and self.mbti:
                 try:
                     self.wealth = self._generate_default_wealth()
-                    dynamic_wealth = self._generate_wealth()
-                    if dynamic_wealth:
-                        self.wealth = dynamic_wealth
+                    if not skip_llm_init:
+                        dynamic_wealth = self._generate_wealth()
+                        if dynamic_wealth:
+                            self.wealth = dynamic_wealth
                 except Exception as e:
                     print(f"生成财富时出错: {e}，使用随机默认财富")
                     self.wealth = self._generate_default_wealth()
@@ -119,7 +121,10 @@ class BaseAgent(SimBaseAgent):
         self._init_memory_storage(vector_store_dir)
 
         if not self.long_term_memory:
-            if self.llm_engine and hasattr(self.llm_engine, 'mock_mode') and not self.llm_engine.mock_mode:
+            if skip_llm_init:
+                # UI模式：跳过LLM初始化，使用基础记忆
+                self._generate_basic_memories()
+            elif self.llm_engine and hasattr(self.llm_engine, 'mock_mode') and not self.llm_engine.mock_mode:
                 self._generate_initial_long_term_memories()
             else:
                 # LLM不可用（mock模式），生成基础记忆

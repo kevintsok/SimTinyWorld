@@ -460,7 +460,7 @@ class SimulationController:
             scenario_type=scenario_type
         )
 
-        # 生成智能体
+        # 生成智能体（使用skip_llm_init避免阻塞UI）
         agent_count = config.get("num_agents", 5)
         custom_agents = config.get("custom_agents", [])
 
@@ -519,7 +519,7 @@ class SimulationController:
         age = random.randint(18, 50)
         background = random.choice(backgrounds)
 
-        # 创建智能体
+        # 创建智能体（跳过LLM初始化以避免阻塞UI）
         agent = BaseAgent(
             id=agent_id,
             name=name,
@@ -532,7 +532,8 @@ class SimulationController:
                 "hometown": "北京",
                 "description": background
             },
-            appearance=f"{name}是一位{age}岁的{occupation}，{background}"
+            appearance=f"{name}是一位{age}岁的{occupation}，{background}",
+            skip_llm_init=True  # UI模式下跳过LLM初始化避免阻塞
         )
 
         # 添加到世界
@@ -570,7 +571,8 @@ class SimulationController:
                 "hometown": "未知",
                 "description": bg_text
             },
-            appearance=f"{agent_data['name']}是一位{agent_data.get('age', 25)}岁"
+            appearance=f"{agent_data['name']}是一位{agent_data.get('age', 25)}岁",
+            skip_llm_init=True  # UI模式下跳过LLM初始化避免阻塞
         )
 
         # 添加到世界
