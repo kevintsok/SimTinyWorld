@@ -35,7 +35,7 @@ def get_llm_engine(engine_type="qwen"):
     # 配置引擎参数
     engine_configs = {
         "qwen": {
-            "model_name": "qwen3.5-flash",
+            "model_name": "qwen3.5-flash-2026-02-23",
             "api_key": api_key
         },
         "openai": {

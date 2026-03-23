@@ -7,6 +7,12 @@
         "top_p": 0.9,
         "description": "通义千问3.5 Flash模型"
       },
+      "qwen3.5-flash-2026-02-23": {
+        "max_tokens": 8192,
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "description": "通义千问3.5 Flash模型 2026-02-23版本"
+      },
       "qwen-plus": {
         "max_tokens": 4096,
         "temperature": 0.8,
