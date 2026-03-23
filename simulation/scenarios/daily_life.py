@@ -428,8 +428,8 @@ class DailyLifeScenario(BaseScenario):
             # 条件1：超过80%说再见
             if len(said_goodbye) >= len(agents) * 0.8:
                 should_end = True
-            # 条件2：对话轮次过多（最多12轮）
-            elif len(conversation_history) > 12:
+            # 条件2：对话轮次过多（最多6轮，减少等待时间）
+            elif len(conversation_history) > 6:
                 should_end = True
             # 条件3：连续3轮都是短回复（客套话）
             elif len(conversation_history) >= 3:
@@ -576,7 +576,7 @@ class DailyLifeScenario(BaseScenario):
         query: str,
         conversation_history: List[Dict]
     ) -> str:
-        """获取智能体回复
+        """获取智能体回复（带超时机制）
 
         Args:
             speaker: 发言者
@@ -594,7 +594,26 @@ class DailyLifeScenario(BaseScenario):
                 with self.agent_locks.get(speaker.id, self.global_lock):
                     history = conversation_history[-4:] if conversation_history else []
                     if hasattr(speaker, 'think'):
-                        return speaker.think(query, history=history)
+                        # 使用超时机制避免长时间阻塞
+                        import signal
+                        def timeout_handler(signum, frame):
+                            raise TimeoutError("LLM调用超时")
+
+                        # 设置10秒超时
+                        signal.signal(signal.SIGALRM, timeout_handler)
+                        signal.alarm(10)
+
+                        try:
+                            result = speaker.think(query, history=history)
+                            signal.alarm(0)  # 取消超时
+                            return result
+                        except TimeoutError:
+                            signal.alarm(0)
+                            print(f"{speaker.name} 的LLM调用超时，使用默认回复")
+                            return "（沉默了一会儿）..."
+                        except Exception as e:
+                            signal.alarm(0)
+                            raise
                     return ""
         except Exception as e:
             print(f"对话响应出错: {e}")

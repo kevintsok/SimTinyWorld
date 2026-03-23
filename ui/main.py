@@ -12,7 +12,9 @@ import os
 import argparse
 import time
 import random
+import threading
 from typing import Dict, List, Optional, Any
+from queue import Queue, Empty
 
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -48,8 +50,11 @@ class SimulationController:
         self.height = height
         self.fast_mode = fast_mode
 
-        # 创建窗口（两个视图共享）
-        self.screen = pygame.display.set_mode((width, height))
+        # 创建窗口（两个视图共享）- 启用硬件加速和双缓冲
+        self.screen = pygame.display.set_mode(
+            (width, height),
+            pygame.HWSURFACE | pygame.DOUBLEBUF | pygame.RESIZABLE
+        )
         pygame.display.set_caption("多智能体社会模拟")
 
         # Session管理器
@@ -124,6 +129,11 @@ class SimulationController:
 
         # DailyLifeScenario实例
         self.scenario: Optional[DailyLifeScenario] = None
+
+        # 异步模拟步进支持
+        self.step_result_queue: Queue = Queue()
+        self.is_step_running: bool = False
+        self._step_thread: Optional[threading.Thread] = None
 
         # 模拟步数计数器
         self.current_step = 0
@@ -631,51 +641,88 @@ class SimulationController:
                 )
 
     def _simulate_step(self):
-        """执行一步模拟"""
+        """执行一步模拟（异步版本，不阻塞UI）"""
         if not self.world or not self.agents:
             return
 
-        # 如果有scenario，使用scenario的完整逻辑
-        if self.scenario:
-            # 调用scenario的step方法
-            self.current_step += 1
-            step_result = self.scenario.step(self.agents, self.world, self.current_step)
+        # 如果上一步还没完成，跳过
+        if self.is_step_running:
+            return
 
-            # 处理对话结果
-            dialogues = step_result.get("dialogues", [])
-            for dialogue in dialogues:
-                location = dialogue.get("location", "")
-                lines = dialogue.get("lines", [])
+        # 启动后台线程执行模拟
+        self.is_step_running = True
+        self._step_thread = threading.Thread(
+            target=self._simulate_step_worker,
+            args=(),
+            daemon=True
+        )
+        self._step_thread.start()
 
-                # 找到说话agent并显示对话
-                for line in lines:
-                    speaker_name = line.get("speaker", "")
-                    content = line.get("content", "")
+    def _simulate_step_worker(self):
+        """后台线程执行模拟步骤"""
+        try:
+            if self.scenario:
+                # 调用scenario的step方法
+                step = self.current_step + 1
+                step_result = self.scenario.step(self.agents, self.world, step)
 
-                    # 使用name_to_id快速查找
-                    agent_id = self.name_to_id.get(speaker_name)
-                    if agent_id and agent_id in self.agents:
-                        self.scenario_view.show_dialog(agent_id, content, duration=3.0)
+                # 将结果放入队列（用于在主线程处理UI更新）
+                self.step_result_queue.put(("scenario", step_result, step))
+            else:
+                # 没有scenario时的简单处理（备用）
+                movements = []
+                for agent_id, agent in list(self.agents.items()):
+                    if random.random() < 0.3:  # 30%概率移动
+                        current_loc = self.world.get_agent_location(agent_id)
+                        if current_loc:
+                            connected = self.world.get_connected_locations(current_loc)
+                            if connected:
+                                new_loc = random.choice(connected)
+                                self.world.move_agent(agent, current_loc, new_loc)
+                                movements.append((agent_id, current_loc, new_loc))
+                self.step_result_queue.put(("simple", movements, None))
+        except Exception as e:
+            print(f"模拟步骤执行出错: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            self.is_step_running = False
 
-            # 更新记忆统计
-            self._sync_agent_memory_counts()
+    def _process_step_results(self):
+        """在主循环中处理模拟步骤结果（不阻塞）"""
+        try:
+            while True:
+                result = self.step_result_queue.get_nowait()
+                result_type, data, step = result
 
-            # 更新轮数
-            self.current_interact_round += 1
-            self.scenario_view.set_round(self.current_interact_round)
-            self.scenario_view.set_total_dialogue_count(self.total_dialogue_count)
+                if result_type == "scenario":
+                    self.current_step = step
 
-        else:
-            # 没有scenario时的简单处理（备用）
-            for agent_id, agent in list(self.agents.items()):
-                if random.random() < 0.3:  # 30%概率移动
-                    current_loc = self.world.get_agent_location(agent_id)
-                    if current_loc:
-                        connected = self.world.get_connected_locations(current_loc)
-                        if connected:
-                            new_loc = random.choice(connected)
-                            self.world.move_agent(agent, current_loc, new_loc)
-                            self.scenario_view.move_agent(agent_id, current_loc, new_loc, duration=1.0)
+                    # 处理对话结果
+                    dialogues = data.get("dialogues", [])
+                    for dialogue in dialogues:
+                        lines = dialogue.get("lines", [])
+                        for line in lines:
+                            speaker_name = line.get("speaker", "")
+                            content = line.get("content", "")
+                            agent_id = self.name_to_id.get(speaker_name)
+                            if agent_id and agent_id in self.agents:
+                                self.scenario_view.show_dialog(agent_id, content, duration=3.0)
+
+                    # 更新记忆统计
+                    self._sync_agent_memory_counts()
+
+                    # 更新轮数
+                    self.current_interact_round += 1
+                    self.scenario_view.set_round(self.current_interact_round)
+                    self.scenario_view.set_total_dialogue_count(self.total_dialogue_count)
+
+                elif result_type == "simple":
+                    for agent_id, from_loc, to_loc in data:
+                        self.scenario_view.move_agent(agent_id, from_loc, to_loc, duration=1.0)
+
+        except Empty:
+            pass
 
     def _sync_agent_memory_counts(self):
         """同步智能体记忆数量到UI"""
@@ -826,6 +873,9 @@ class SimulationController:
                         elif result and result.startswith("select_session:"):
                             session_id = result.split(":")[1]
                             self._on_load_session(session_id)
+
+                # 处理异步模拟步骤结果（不阻塞）
+                self._process_step_results()
 
                 # 自动步进
                 if not self.is_paused:
