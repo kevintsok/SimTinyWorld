@@ -25,6 +25,7 @@ from environment.layout import EnvironmentLayout
 from agent.base_agent import BaseAgent
 from session import SessionManager
 from simulation.scenarios.daily_life import DailyLifeScenario
+from llm_engine.factory import get_global_engine, has_global_engine
 
 
 class SimulationController:
@@ -399,6 +400,10 @@ class SimulationController:
     def _start_simulation(self, config: dict):
         """开始模拟"""
         self.current_view = "scenario"
+
+        # 初始化全局LLM引擎（如果还没有初始化）
+        if not has_global_engine():
+            get_global_engine("qwen", mock_mode=self.fast_mode)
 
         # 设置场景类型
         self.scenario_type = config.get("scenario_type", "daily_life")

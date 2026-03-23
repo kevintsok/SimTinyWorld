@@ -276,6 +276,11 @@ class BaseAgent(SimBaseAgent):
             str: 生成的回复
         """
         try:
+            # 获取LLM引擎（提前检查，避免后续昂贵操作）
+            llm_engine = self._get_llm_engine()
+            if llm_engine is None:
+                return "（沉默不语）"
+
             # 获取相关的记忆
             relevant_docs, short_term_memory = self._get_relevant_memory(query)
             
@@ -324,9 +329,6 @@ class BaseAgent(SimBaseAgent):
             if mbti_mood_prompt:
                 system_prompt += f"\n\n{mbti_mood_prompt}"
                 
-            # 获取LLM引擎
-            llm_engine = self._get_llm_engine()
-            
             # 获取LLM回复
             if hasattr(llm_engine, 'generate_response'):
                 response = llm_engine.generate_response(
@@ -824,16 +826,17 @@ class BaseAgent(SimBaseAgent):
 
     # ===== 继承自 SimBaseAgent 的抽象方法实现 =====
 
-    def think(self, prompt: str) -> str:
+    def think(self, prompt: str, history: List[Dict] = None) -> str:
         """思考并生成回复
 
         Args:
             prompt: 输入提示词
+            history: 可选的对话历史列表
 
         Returns:
             str: 生成的回复
         """
-        return self.response(prompt)
+        return self.response(prompt, history=history)
 
     def perceive(self, event) -> None:
         """感知事件
