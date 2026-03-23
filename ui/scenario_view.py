@@ -132,6 +132,9 @@ class ScenarioView:
         # 顶部信息栏高度
         self.header_height = 50
 
+        # 加载状态文本
+        self.loading_text: str = ""
+
         # ===== 每日交互轮数输入框 =====
         self.interact_rounds: int = 5  # 默认每日5轮交互
         interact_rounds_rect = pygame.Rect(
@@ -238,6 +241,15 @@ class ScenarioView:
                 description=info.get('description', '')
             )
         self.connections = connections
+
+    def set_loading_text(self, text: str):
+        """设置加载状态文本"""
+        self.loading_text = text
+        pygame.display.flip()
+
+    def clear_loading_text(self):
+        """清除加载状态文本"""
+        self.loading_text = ""
 
     def add_agent(self, agent_id: str, name: str, mbti: str, location: str,
                   mood_value: float = 0.0, mood_desc: str = "平静", status: str = "空闲",
@@ -804,6 +816,30 @@ class ScenarioView:
 
             surface.blit(notif_surface, (box_x, box_y))
 
+    def draw_loading_overlay(self, surface: pygame.Surface):
+        """绘制加载中的覆盖层"""
+        if not self.loading_text:
+            return
+
+        # 半透明黑色背景
+        overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 180))
+        surface.blit(overlay, (0, 0))
+
+        # 绘制加载文本
+        font = get_font(20)
+        text_lines = self.loading_text.split('\n')
+
+        total_height = len(text_lines) * 30
+        start_y = (self.height - total_height) // 2
+
+        for i, line in enumerate(text_lines):
+            text_surface = font.render(line, True, (255, 255, 255))
+            text_rect = text_surface.get_rect(center=(self.width // 2, start_y + i * 30))
+            surface.blit(text_surface, text_rect)
+
+        pygame.display.flip()
+
     def draw_panel(self, surface: pygame.Surface):
         """绘制右侧信息面板（含详情开关）"""
         # 背景
@@ -1336,6 +1372,11 @@ class ScenarioView:
     def draw(self, selected_agent_id: Optional[str] = None,
              is_paused: bool = False, speed: float = 1.0):
         """绘制整个视图"""
+        # 如果正在加载，显示加载覆盖层
+        if self.loading_text:
+            self.draw_loading_overlay(self.screen)
+            return
+
         # 更新选中智能体ID
         if selected_agent_id is not None:
             self.selected_agent_id = selected_agent_id

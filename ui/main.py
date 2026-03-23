@@ -401,18 +401,28 @@ class SimulationController:
         """开始模拟"""
         self.current_view = "scenario"
 
+        # 显示加载状态
+        self.scenario_view.set_loading_text("正在初始化...")
+        self.scenario_view.draw()
+
         # 初始化全局LLM引擎（如果还没有初始化）
         if not has_global_engine():
+            self.scenario_view.set_loading_text("正在连接AI引擎...")
+            self.scenario_view.draw()
             get_global_engine("qwen", mock_mode=self.fast_mode)
 
         # 设置场景类型
         self.scenario_type = config.get("scenario_type", "daily_life")
 
         # 初始化世界
+        self.scenario_view.set_loading_text("正在创建世界...")
+        self.scenario_view.draw()
         location_count = config.get("locations", 5)
         self.world = World(visual_mode=False, location_count=location_count)
 
         # 初始化DailyLifeScenario
+        self.scenario_view.set_loading_text("正在加载场景...")
+        self.scenario_view.draw()
         if self.scenario_type == "daily_life":
             # 创建config字典
             scenario_config = {
@@ -461,6 +471,8 @@ class SimulationController:
         )
 
         # 生成智能体（使用skip_llm_init避免阻塞UI）
+        self.scenario_view.set_loading_text("正在创建智能体...")
+        self.scenario_view.draw()
         agent_count = config.get("num_agents", 5)
         custom_agents = config.get("custom_agents", [])
 
@@ -487,6 +499,9 @@ class SimulationController:
         self.scenario_view.set_day(1)
         self.scenario_view.set_round(1)
         self.scenario_view.set_total_dialogue_count(0)
+
+        # 清除加载状态，开始模拟
+        self.scenario_view.clear_loading_text()
 
         # 开始模拟
         self.is_paused = False
