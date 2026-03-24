@@ -1198,8 +1198,8 @@ class ScenarioView:
             anchor_y="center", font_name="arial"
         )
 
-        # 保存开关区域供点击检测
-        self.detail_toggle_rect = arcade.LBWH(panel_x + 15, y_offset, self.panel_width - 30, 35)
+        # 保存开关区域供点击检测 (left, bottom, width, height)
+        self.detail_toggle_rect = (panel_x + 15, y_offset, self.panel_width - 30, 35)
 
     def _draw_agent_list(self, panel_x: int):
         """绘制智能体列表"""
@@ -1685,9 +1685,11 @@ class ScenarioView:
             return None
 
         # 检查详情开关
-        if self.detail_toggle_rect and self.detail_toggle_rect.contains(x, y):
-            self.toggle_agent_details()
-            return "toggle_details"
+        if self.detail_toggle_rect:
+            left, bottom, width, height = self.detail_toggle_rect
+            if left <= x <= left + width and bottom <= y <= bottom + height:
+                self.toggle_agent_details()
+                return "toggle_details"
 
         # 检查控制栏按钮
         if y < self.control_bar_height:
