@@ -585,7 +585,7 @@ class MainView:
     def _draw_selected_border(self, button: Button):
         """绘制选中边框"""
         draw_rectangle_outline(
-            button.center_x, button.center_y,
+            button.x + button.width / 2, button.y + button.height / 2,
             button.width + 6, button.height + 6,
             self.ACCENT_COLOR, 3
         )
