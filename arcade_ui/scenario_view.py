@@ -447,6 +447,8 @@ class ScenarioView:
         # 限制事件列表大小，防止内存无限增长
         if len(self.events) > 100:
             self.events = self.events[-100:]
+            # 清除已触发事件记录，因为索引已改变
+            self.triggered_events.clear()
 
     def set_round(self, round_num: int):
         """设置当前轮数"""
