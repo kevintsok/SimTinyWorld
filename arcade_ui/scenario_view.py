@@ -455,6 +455,10 @@ class ScenarioView:
         """设置累计对话次数"""
         self.total_dialogue_count = count
 
+    def set_interact_rounds(self, rounds: int):
+        """设置每日交互轮数"""
+        self.interact_rounds = max(1, rounds)
+
     def set_locations(self, locations: Dict[str, dict], connections: Dict[str, List[Tuple[str, int]]]):
         """设置位置数据"""
         self.locations.clear()
@@ -1195,7 +1199,7 @@ class ScenarioView:
         )
 
         # 保存开关区域供点击检测
-        self.detail_toggle_rect = arcade.Rect(panel_x + 15, y_offset, self.panel_width - 30, 35)
+        self.detail_toggle_rect = arcade.LBWH(panel_x + 15, y_offset, self.panel_width - 30, 35)
 
     def _draw_agent_list(self, panel_x: int):
         """绘制智能体列表"""
