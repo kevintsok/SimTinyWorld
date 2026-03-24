@@ -121,6 +121,7 @@ class SimulationController:
         # 异步模拟步进支持
         self.step_result_queue: Queue = Queue()
         self.is_step_running: bool = False
+        self._step_lock: threading.Lock = threading.Lock()
         self._step_thread: Optional[threading.Thread] = None
 
         # 模拟步数计数器
@@ -257,16 +258,18 @@ class SimulationController:
         if action == "toggle_pause":
             self.is_paused = not self.is_paused
         elif action and action.startswith("speed:"):
-            speed_str = action.split(":")[1]
-            try:
-                self.speed = float(speed_str) if speed_str else 1.0
-            except ValueError:
-                self.speed = 1.0
+            parts = action.split(":")
+            if len(parts) >= 2 and parts[1]:
+                try:
+                    self.speed = float(parts[1])
+                except ValueError:
+                    self.speed = 1.0
         elif action == "step":
             self._simulate_step()
         elif action and action.startswith("select:"):
-            agent_id = action.split(":")[1]
-            self.selected_agent_id = agent_id
+            parts = action.split(":")
+            if len(parts) >= 2:
+                self.selected_agent_id = parts[1]
 
     # ==================== 更新和绘制 ====================
 
@@ -477,10 +480,11 @@ class SimulationController:
         if not self.world or not self.agents:
             return
 
-        if self.is_step_running:
-            return
+        with self._step_lock:
+            if self.is_step_running:
+                return
+            self.is_step_running = True
 
-        self.is_step_running = True
         self._step_thread = threading.Thread(
             target=self._simulate_step_worker,
             args=(),
@@ -512,7 +516,8 @@ class SimulationController:
             import traceback
             traceback.print_exc()
         finally:
-            self.is_step_running = False
+            with self._step_lock:
+                self.is_step_running = False
 
     def _process_step_results(self):
         """在主循环中处理模拟步骤结果（不阻塞）"""
@@ -542,8 +547,10 @@ class SimulationController:
                             from_loc = move.get("from", "")
                             to_loc = move.get("to", "")
                             agent_id = self.name_to_id.get(agent_name)
+                        elif isinstance(move, (list, tuple)) and len(move) >= 3:
+                            agent_id, from_loc, to_loc = move[0], move[1], move[2]
                         else:
-                            agent_id, from_loc, to_loc = move
+                            continue
                         if agent_id and from_loc and to_loc:
                             self.scenario_view.move_agent(agent_id, from_loc, to_loc, duration=1.0)
 
@@ -554,8 +561,10 @@ class SimulationController:
                     self.scenario_view.set_total_dialogue_count(self.total_dialogue_count)
 
                 elif result_type == "simple":
-                    for agent_id, from_loc, to_loc in data:
-                        self.scenario_view.move_agent(agent_id, from_loc, to_loc, duration=1.0)
+                    for move in data:
+                        if isinstance(move, (list, tuple)) and len(move) >= 3:
+                            agent_id, from_loc, to_loc = move[0], move[1], move[2]
+                            self.scenario_view.move_agent(agent_id, from_loc, to_loc, duration=1.0)
 
         except Empty:
             pass
