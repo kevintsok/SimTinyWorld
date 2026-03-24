@@ -80,7 +80,7 @@ class SimulationController:
             on_save_session=self._on_save_session_in_scenario,
             on_load_session=self._on_load_session_in_scenario
         )
-        self.scenario_view = ScenarioView(width, height, scenario_interface, self.window)
+        self.scenario_view = ScenarioView(width, height, scenario_interface)
 
         # Session面板
         self.session_panel_visible = False

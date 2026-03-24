@@ -18,7 +18,7 @@ from typing import Dict, List, Optional, Tuple, Any, Set, Callable
 from dataclasses import dataclass, field
 
 # Import from components
-from components import Button, Panel, TextBox, ProgressBar, Label, COLORS
+from arcade_ui.components import Button, Panel, TextBox, ProgressBar, Label, COLORS
 
 # ============================================================================
 # Constants (reused from game_view.py)
