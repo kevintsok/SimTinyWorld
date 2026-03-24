@@ -531,6 +531,19 @@ class SimulationController:
                             if agent_id and agent_id in self.agents:
                                 self.scenario_view.show_dialog(agent_id, content, duration=3.0)
 
+                    # 同步移动（修复：之前忽略了scenario类型的movements）
+                    movements = data.get("movements", [])
+                    for move in movements:
+                        if isinstance(move, dict):
+                            agent_name = move.get("agent", "")
+                            from_loc = move.get("from", "")
+                            to_loc = move.get("to", "")
+                            agent_id = self.name_to_id.get(agent_name)
+                        else:
+                            agent_id, from_loc, to_loc = move
+                        if agent_id and from_loc and to_loc:
+                            self.scenario_view.move_agent(agent_id, from_loc, to_loc, duration=1.0)
+
                     self._sync_agent_memory_counts()
 
                     self.current_interact_round += 1
