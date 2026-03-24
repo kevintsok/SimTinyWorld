@@ -283,12 +283,10 @@ class SimulationController:
 
     def on_draw(self):
         """绘制"""
-        arcade.start_render()
-
         if self.current_view == "main":
             self.main_view.draw()
         elif self.current_view == "scenario":
-            self.scenario_view.on_draw()
+            self.scenario_view.draw()
 
     # ==================== 模拟控制 ====================
 
