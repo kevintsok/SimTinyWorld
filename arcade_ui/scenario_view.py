@@ -1838,7 +1838,11 @@ class ScenarioView:
         self.scenario_description = data.get("scenario_description", "")
         self.scenario_goals = data.get("scenario_goals", [])
         self.current_era = data.get("current_era", "default")
-        self.events = data.get("events", [])
+        events = data.get("events", [])
+        # 应用上限防止内存无限增长（与add_event保持一致）
+        if len(events) > 100:
+            events = events[-100:]
+        self.events = events
 
         # 恢复位置数据
         locations_data = data.get("locations", {})
