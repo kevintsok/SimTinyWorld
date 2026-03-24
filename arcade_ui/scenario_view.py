@@ -444,6 +444,9 @@ class ScenarioView:
             "content": content,
             "participants": participants or []
         })
+        # 限制事件列表大小，防止内存无限增长
+        if len(self.events) > 100:
+            self.events = self.events[-100:]
 
     def set_round(self, round_num: int):
         """设置当前轮数"""

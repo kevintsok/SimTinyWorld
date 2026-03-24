@@ -258,7 +258,10 @@ class SimulationController:
             self.is_paused = not self.is_paused
         elif action and action.startswith("speed:"):
             speed_str = action.split(":")[1]
-            self.speed = float(speed_str)
+            try:
+                self.speed = float(speed_str) if speed_str else 1.0
+            except ValueError:
+                self.speed = 1.0
         elif action == "step":
             self._simulate_step()
         elif action and action.startswith("select:"):
