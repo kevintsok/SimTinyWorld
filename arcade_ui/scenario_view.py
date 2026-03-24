@@ -582,6 +582,9 @@ class ScenarioView:
             duration=duration
         )
         self.dialogs.append(bubble)
+        # 限制对话列表大小，防止内存无限增长
+        if len(self.dialogs) > 100:
+            self.dialogs = self.dialogs[-100:]
         agent.is_talking = True
         agent.current_dialog = text
         agent.dialog_end_time = time.time() + duration
@@ -627,6 +630,9 @@ class ScenarioView:
                 "start_time": time.time(),
                 "duration": 4.0
             })
+            # 限制通知列表大小，防止内存无限增长
+            if len(self.event_notifications) > 50:
+                self.event_notifications = self.event_notifications[-50:]
             return event
         return None
 
