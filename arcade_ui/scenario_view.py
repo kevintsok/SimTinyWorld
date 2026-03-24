@@ -1069,7 +1069,7 @@ class ScenarioView:
         box_y = y - 80
 
         alpha = int(240 * dialog.opacity / 255)
-        bg_color = (255, 255, 255, alpha)
+        bg_color = (255, 255, 255)
 
         # 背景
         draw_rectangle_filled(x, y - 40, box_width, box_height, bg_color)
@@ -1607,14 +1607,14 @@ class ScenarioView:
             draw_rectangle_filled(
                 box_x + box_width // 2, box_y + box_height // 2,
                 box_width, box_height,
-                (40, 44, 52, alpha)
+                (40, 44, 52)
             )
 
             # 边框
             draw_rectangle_outline(
                 box_x + box_width // 2, box_y + box_height // 2,
                 box_width, box_height,
-                self.accent_color + (alpha,),
+                self.accent_color,
                 2
             )
 

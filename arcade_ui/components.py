@@ -463,7 +463,7 @@ class Dropdown:
             arrow_x, arrow_y - 5,
             arrow_x + 8, arrow_y - 5,
             arrow_x + 4, arrow_y + 5,
-            color=self.text_color,
+            self.text_color,
         )
 
         # Draw options if open
@@ -749,7 +749,8 @@ class Slider:
         )
 
         # Draw filled portion
-        fill_ratio = (self.value - self.min_value) / (self.max_value - self.min_value)
+        value_range = self.max_value - self.min_value
+        fill_ratio = (self.value - self.min_value) / value_range if value_range != 0 else 0
         fill_width = self.width * fill_ratio
         if fill_width > 0:
             draw_rectangle_filled(
