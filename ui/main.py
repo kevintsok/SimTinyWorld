@@ -131,7 +131,7 @@ class SimulationController:
         self.scenario: Optional[DailyLifeScenario] = None
 
         # 异步模拟步进支持
-        self.step_result_queue: Queue = Queue()
+        self.step_result_queue: Queue = Queue(maxsize=10)
         self.is_step_running: bool = False
         self._step_thread: Optional[threading.Thread] = None
 
