@@ -1685,51 +1685,51 @@ class BaseAgent(SimBaseAgent):
                 if json_start >= 0 and json_end > json_start:
                     plan_json = plan_text[json_start:json_end]
                     daily_plan = json.loads(plan_json)
-                
-                # 验证并清理计划
-                cleaned_plan = []
-                total_duration = 0
-                
-                for item in daily_plan:
-                    # 确保必要的键存在
-                    if "location" not in item or "duration" not in item or "activity" not in item:
-                        continue
-                        
-                    # 确保位置是有效的
-                    if item["location"] not in available_locations:
-                        # 替换为当前位置或随机位置
-                        item["location"] = current_location or random.choice(available_locations)
-                    
-                    # 确保duration是有效的
-                    try:
-                        item["duration"] = int(item["duration"])
-                        if item["duration"] < 1:
+
+                    # 验证并清理计划
+                    cleaned_plan = []
+                    total_duration = 0
+
+                    for item in daily_plan:
+                        # 确保必要的键存在
+                        if "location" not in item or "duration" not in item or "activity" not in item:
+                            continue
+
+                        # 确保位置是有效的
+                        if item["location"] not in available_locations:
+                            # 替换为当前位置或随机位置
+                            item["location"] = current_location or random.choice(available_locations)
+
+                        # 确保duration是有效的
+                        try:
+                            item["duration"] = int(item["duration"])
+                            if item["duration"] < 1:
+                                item["duration"] = 1
+                        except:
                             item["duration"] = 1
-                    except:
-                        item["duration"] = 1
-                    
-                    # 如果没有状态，根据活动生成一个
-                    if "status" not in item or not item["status"]:
-                        item["status"] = self._derive_status_from_activity(item["activity"])
 
-                    cleaned_plan.append(item)
-                    total_duration += item["duration"]
-                
-                # 确保总duration不超过max_rounds
-                self._normalize_plan_durations(cleaned_plan, max_rounds)
+                        # 如果没有状态，根据活动生成一个
+                        if "status" not in item or not item["status"]:
+                            item["status"] = self._derive_status_from_activity(item["activity"])
 
-                # 更新智能体的计划和状态
-                self.daily_plan = cleaned_plan
-                if cleaned_plan:
-                    self.status = cleaned_plan[0]["status"]
-                    
-                # 记录计划到短期记忆
-                plan_summary = "我的今日计划:\n"
-                for i, item in enumerate(cleaned_plan):
-                    plan_summary += f"{i+1}. 在{item['location']}停留{item['duration']}个时段，{item['activity']}。\n"
-                self.add_memory(plan_summary)
-                
-                return cleaned_plan
+                        cleaned_plan.append(item)
+                        total_duration += item["duration"]
+
+                    # 确保总duration不超过max_rounds
+                    self._normalize_plan_durations(cleaned_plan, max_rounds)
+
+                    # 更新智能体的计划和状态
+                    self.daily_plan = cleaned_plan
+                    if cleaned_plan:
+                        self.status = cleaned_plan[0]["status"]
+
+                    # 记录计划到短期记忆
+                    plan_summary = "我的今日计划:\n"
+                    for i, item in enumerate(cleaned_plan):
+                        plan_summary += f"{i+1}. 在{item['location']}停留{item['duration']}个时段，{item['activity']}。\n"
+                    self.add_memory(plan_summary)
+
+                    return cleaned_plan
 
             except Exception as e:
                 print(f"{self.name}制定计划时出错: {e}")
