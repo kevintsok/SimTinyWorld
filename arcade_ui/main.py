@@ -431,7 +431,7 @@ class SimulationController:
             name=agent_data["name"],
             mbti=agent_data.get("mbti", "ENFP"),
             gender=agent_data.get("gender", "男"),
-            age=int(agent_data.get("age", 25)),
+            age=int(agent_data.get("age", 25)) if str(agent_data.get("age", 25)).isdigit() else 25,
             background={
                 "occupation": agent_data.get("occupation", "未知"),
                 "education": "本科",
