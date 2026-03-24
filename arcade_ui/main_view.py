@@ -387,7 +387,7 @@ class MainView:
         if agent_count_text and agent_count_text.isdigit():
             config["num_agents"] = int(agent_count_text)
         if round_count_text and round_count_text.isdigit():
-            config["num_rounds"] = int(round_count_text)
+            config["interact_rounds"] = int(round_count_text)
 
         if self.selected_scenario == "emergency":
             emergency_topic = self.emergency_topic_input.text.strip()

@@ -246,6 +246,8 @@ class ScenarioView:
         self.locations: Dict[str, LocationVisual] = {}
         self.dialogs: List[DialogBubble] = []
         self.connections: Dict[str, List[Tuple[str, int]]] = {}
+        # 缓存：智能体ID -> 位置名称（避免每帧O(agents×locations)查找）
+        self._agent_location_cache: Dict[str, str] = {}
 
         # 动画
         self.camera_offset = [0, 0]
@@ -510,6 +512,7 @@ class ScenarioView:
 
         if location in self.locations:
             self.locations[location].agents.add(agent_id)
+            self._agent_location_cache[agent_id] = location
 
     def move_agent(self, agent_id: str, from_location: str, to_location: str, duration: float = 1.0):
         """移动智能体"""
@@ -530,6 +533,7 @@ class ScenarioView:
 
         from_loc.agents.discard(agent_id)
         to_loc.agents.add(agent_id)
+        self._agent_location_cache[agent_id] = to_location
 
     def update_agent_mood(self, agent_id: str, mood_value: float, mood_desc: str = None):
         """更新智能体心情"""
@@ -1249,14 +1253,10 @@ class ScenarioView:
                     self.accent_color, 1
                 )
 
-            # 获取位置
-            loc_name = "未知"
-            for loc in self.locations.values():
-                if agent.id in loc.agents:
-                    loc_name = loc.name
-                    if len(loc_name) > 5:
-                        loc_name = loc_name[:5] + ".."
-                    break
+            # 获取位置（使用缓存，O(1)）
+            loc_name = self._agent_location_cache.get(agent.id, "未知")
+            if len(loc_name) > 5:
+                loc_name = loc_name[:5] + ".."
 
             # 心情文本
             mood_text = self._get_mood_text(agent.mood_value)
@@ -1546,12 +1546,8 @@ class ScenarioView:
         )
         y_offset += 20
 
-        # 位置
-        loc_name = "未知"
-        for loc in self.locations.values():
-            if agent.id in loc.agents:
-                loc_name = loc.name
-                break
+        # 位置（使用缓存，O(1)）
+        loc_name = self._agent_location_cache.get(agent.id, "未知")
         arcade.draw_text(
             f"位置: {loc_name}",
             panel_content_x, y_offset,
