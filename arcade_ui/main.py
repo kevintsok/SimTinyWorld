@@ -51,11 +51,6 @@ class SimulationController:
         self.height = height
         self.fast_mode = fast_mode
 
-        # 连接绘制回调
-        self.window.on_draw = self.on_draw
-        self.window.on_mouse_press = self.on_mouse_press
-        self.window.on_mouse_motion = self.on_mouse_motion
-
         # Session管理器
         self.session_manager = SessionManager()
         self.current_session_id: Optional[str] = None
@@ -571,22 +566,24 @@ class SimulationController:
             pass
 
     def _sync_agent_memory_counts(self):
-        """同步智能体记忆数量到UI"""
-        for agent_id, agent in self.agents.items():
-            long_term_count = len(getattr(agent, 'long_term_memory', []) or [])
-            short_term_count = len(getattr(agent, 'short_term_memory', []) or [])
-            recent_memories = getattr(agent, 'short_term_memory', [])[-3:] if hasattr(agent, 'short_term_memory') else []
-            long_term_memories = getattr(agent, 'long_term_memory', []) or []
-            short_term_memories = getattr(agent, 'short_term_memory', []) or []
+        """同步选中智能体的记忆数量到UI"""
+        if not self.selected_agent_id or self.selected_agent_id not in self.agents:
+            return
+        agent = self.agents[self.selected_agent_id]
+        long_term_count = len(getattr(agent, 'long_term_memory', []) or [])
+        short_term_count = len(getattr(agent, 'short_term_memory', []) or [])
+        recent_memories = getattr(agent, 'short_term_memory', [])[-3:] if hasattr(agent, 'short_term_memory') else []
+        long_term_memories = getattr(agent, 'long_term_memory', []) or []
+        short_term_memories = getattr(agent, 'short_term_memory', []) or []
 
-            self.scenario_view.update_agent_info(
-                agent_id,
-                long_term_memory_count=long_term_count,
-                short_term_memory_count=short_term_count,
-                short_term_memories=short_term_memories[-10:],
-                long_term_memories=long_term_memories[-10:],
-                recent_memories=recent_memories
-            )
+        self.scenario_view.update_agent_info(
+            self.selected_agent_id,
+            long_term_memory_count=long_term_count,
+            short_term_memory_count=short_term_count,
+            short_term_memories=short_term_memories[-10:],
+            long_term_memories=long_term_memories[-10:],
+            recent_memories=recent_memories
+        )
 
     # ==================== Session管理 ====================
 
