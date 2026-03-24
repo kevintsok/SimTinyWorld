@@ -11,7 +11,7 @@ import arcade
 from typing import Callable, Optional, List, Dict, Any
 from dataclasses import dataclass
 
-from arcade_ui.components import Button, Panel, TextBox, Dropdown, COLORS
+from arcade_ui.components import Button, Panel, TextBox, Dropdown, COLORS, draw_rectangle_filled, draw_rectangle_outline
 
 
 @dataclass
@@ -523,7 +523,7 @@ class MainView:
     def draw(self):
         """绘制主界面"""
         # 绘制背景
-        arcade.draw_rectangle_filled(
+        draw_rectangle_filled(
             self.rect_x + self.rect_width / 2,
             self.rect_y + self.rect_height / 2,
             self.rect_width, self.rect_height,
@@ -584,7 +584,7 @@ class MainView:
 
     def _draw_selected_border(self, button: Button):
         """绘制选中边框"""
-        arcade.draw_rectangle_outline(
+        draw_rectangle_outline(
             button.center_x, button.center_y,
             button.width + 6, button.height + 6,
             self.ACCENT_COLOR, 3

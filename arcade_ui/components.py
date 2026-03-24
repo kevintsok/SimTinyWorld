@@ -27,6 +27,25 @@ COLORS = {
 }
 
 
+# Pygame-compatible rectangle drawing wrappers for arcade
+def draw_rectangle_filled(center_x: float, center_y: float, width: float, height: float, color: Tuple[int, int, int]):
+    """Draw a filled rectangle (pygame-compatible API)."""
+    arcade.draw_lbwh_rectangle_filled(
+        center_x - width / 2,
+        center_y - height / 2,
+        width, height, color
+    )
+
+
+def draw_rectangle_outline(center_x: float, center_y: float, width: float, height: float, color: Tuple[int, int, int], border_width: int = 1):
+    """Draw a rectangle outline (pygame-compatible API)."""
+    arcade.draw_lbwh_rectangle_outline(
+        center_x - width / 2,
+        center_y - height / 2,
+        width, height, color, border_width
+    )
+
+
 class Button:
     """Button component with hover state"""
 
@@ -92,7 +111,7 @@ class Button:
             color = tuple(max(0, c - 50) for c in color)
 
         # Draw button background
-        arcade.draw_rectangle_filled(
+        draw_rectangle_filled(
             center_x=self.x + self.width / 2,
             center_y=self.y + self.height / 2,
             width=self.width,
@@ -101,7 +120,7 @@ class Button:
         )
 
         # Draw border
-        arcade.draw_rectangle_outline(
+        draw_rectangle_outline(
             center_x=self.x + self.width / 2,
             center_y=self.y + self.height / 2,
             width=self.width,
@@ -164,7 +183,7 @@ class Panel:
             return
 
         # Draw background
-        arcade.draw_rectangle_filled(
+        draw_rectangle_filled(
             center_x=self.x + self.width / 2,
             center_y=self.y + self.height / 2,
             width=self.width,
@@ -173,7 +192,7 @@ class Panel:
         )
 
         # Draw border
-        arcade.draw_rectangle_outline(
+        draw_rectangle_outline(
             center_x=self.x + self.width / 2,
             center_y=self.y + self.height / 2,
             width=self.width,
@@ -185,7 +204,7 @@ class Panel:
         # Draw title bar if title exists
         if self.title:
             # Title bar background
-            arcade.draw_rectangle_filled(
+            draw_rectangle_filled(
                 center_x=self.x + self.width / 2,
                 center_y=self.y + self.height - self.title_height / 2,
                 width=self.width - 4,
@@ -278,7 +297,7 @@ class TextBox:
         bg_color = self.active_color if self.is_active else self.background_color
 
         # Draw background
-        arcade.draw_rectangle_filled(
+        draw_rectangle_filled(
             center_x=self.x + self.width / 2,
             center_y=self.y + self.height / 2,
             width=self.width,
@@ -288,7 +307,7 @@ class TextBox:
 
         # Draw border
         border_color = self.active_color if self.is_active else self.border_color
-        arcade.draw_rectangle_outline(
+        draw_rectangle_outline(
             center_x=self.x + self.width / 2,
             center_y=self.y + self.height / 2,
             width=self.width,
@@ -408,7 +427,7 @@ class Dropdown:
     def draw(self):
         """Draw the dropdown"""
         # Draw main box
-        arcade.draw_rectangle_filled(
+        draw_rectangle_filled(
             center_x=self.x + self.width / 2,
             center_y=self.y + self.height / 2,
             width=self.width,
@@ -416,7 +435,7 @@ class Dropdown:
             color=self.background_color,
         )
 
-        arcade.draw_rectangle_outline(
+        draw_rectangle_outline(
             center_x=self.x + self.width / 2,
             center_y=self.y + self.height / 2,
             width=self.width,
@@ -454,7 +473,7 @@ class Dropdown:
                 is_hovered = i == self.hovered_option
 
                 color = self.hover_color if is_hovered else self.background_color
-                arcade.draw_rectangle_filled(
+                draw_rectangle_filled(
                     center_x=self.x + self.width / 2,
                     center_y=opt_y + self.option_height / 2,
                     width=self.width,
@@ -513,7 +532,7 @@ class ProgressBar:
     def draw(self):
         """Draw the progress bar"""
         # Draw background
-        arcade.draw_rectangle_filled(
+        draw_rectangle_filled(
             center_x=self.x + self.width / 2,
             center_y=self.y + self.height / 2,
             width=self.width,
@@ -524,7 +543,7 @@ class ProgressBar:
         # Draw progress fill
         fill_width = self.width * (self.value / self.max_value) if self.max_value > 0 else 0
         if fill_width > 0:
-            arcade.draw_rectangle_filled(
+            draw_rectangle_filled(
                 center_x=self.x + fill_width / 2,
                 center_y=self.y + self.height / 2,
                 width=fill_width,
@@ -533,7 +552,7 @@ class ProgressBar:
             )
 
         # Draw border
-        arcade.draw_rectangle_outline(
+        draw_rectangle_outline(
             center_x=self.x + self.width / 2,
             center_y=self.y + self.height / 2,
             width=self.width,
@@ -624,7 +643,7 @@ class Checkbox:
     def draw(self):
         """Draw the checkbox"""
         # Draw box
-        arcade.draw_rectangle_outline(
+        draw_rectangle_outline(
             center_x=self.x + self.size / 2,
             center_y=self.y + self.size / 2,
             width=self.size,
@@ -635,7 +654,7 @@ class Checkbox:
 
         # Draw checkmark if checked
         if self.checked:
-            arcade.draw_rectangle_filled(
+            draw_rectangle_filled(
                 center_x=self.x + self.size / 2,
                 center_y=self.y + self.size / 2,
                 width=self.size - 6,
@@ -721,7 +740,7 @@ class Slider:
     def draw(self):
         """Draw the slider"""
         # Draw track background
-        arcade.draw_rectangle_filled(
+        draw_rectangle_filled(
             center_x=self.x + self.width / 2,
             center_y=self.y + self.height / 2,
             width=self.width,
@@ -733,7 +752,7 @@ class Slider:
         fill_ratio = (self.value - self.min_value) / (self.max_value - self.min_value)
         fill_width = self.width * fill_ratio
         if fill_width > 0:
-            arcade.draw_rectangle_filled(
+            draw_rectangle_filled(
                 center_x=self.x + fill_width / 2,
                 center_y=self.y + self.height / 2,
                 width=fill_width,

@@ -18,7 +18,7 @@ from typing import Dict, List, Optional, Tuple, Any, Set, Callable
 from dataclasses import dataclass, field
 
 # Import from components
-from arcade_ui.components import Button, Panel, TextBox, ProgressBar, Label, COLORS
+from arcade_ui.components import Button, Panel, TextBox, ProgressBar, Label, COLORS, draw_rectangle_filled, draw_rectangle_outline
 
 # ============================================================================
 # Constants (reused from game_view.py)
@@ -680,7 +680,7 @@ class ScenarioView:
     def draw(self):
         """绘制整个视图"""
         # 清屏
-        arcade.draw_rectangle_filled(
+        draw_rectangle_filled(
             self.width // 2, self.height // 2,
             self.width, self.height,
             self.bg_color
@@ -702,7 +702,7 @@ class ScenarioView:
     def _draw_header(self):
         """绘制顶部信息栏"""
         # 背景
-        arcade.draw_rectangle_filled(
+        draw_rectangle_filled(
             self.width // 2, self.height - self.header_height // 2,
             self.width, self.header_height,
             self.panel_bg_color
@@ -760,14 +760,14 @@ class ScenarioView:
         progress_x = self.width - 260
         progress_y = self.height - 38
 
-        arcade.draw_rectangle_filled(
+        draw_rectangle_filled(
             progress_x + progress_width // 2, progress_y,
             progress_width, 10,
             COLORS["input_bg"]
         )
         fill_width = int(self.current_round / self.max_rounds * progress_width)
         if fill_width > 0:
-            arcade.draw_rectangle_filled(
+            draw_rectangle_filled(
                 progress_x + fill_width // 2, progress_y,
                 fill_width, 10,
                 self.accent_color
@@ -778,7 +778,7 @@ class ScenarioView:
         timeline_y = self.height - self.header_height - self.timeline_height
 
         # 背景
-        arcade.draw_rectangle_filled(
+        draw_rectangle_filled(
             self.map_width // 2,
             timeline_y + self.timeline_height // 2,
             self.map_width, self.timeline_height,
@@ -855,7 +855,7 @@ class ScenarioView:
         map_height = map_top - map_bottom
 
         # 背景
-        arcade.draw_rectangle_filled(
+        draw_rectangle_filled(
             self.map_width // 2, map_bottom + map_height // 2,
             self.map_width, map_height,
             self.map_bg_color
@@ -925,28 +925,28 @@ class ScenarioView:
 
         # 根据图标类型绘制
         if icon_type == "palace":
-            arcade.draw_rectangle_filled(x, y - size//6, size, size//2, color)
+            draw_rectangle_filled(x, y - size//6, size, size//2, color)
             arcade.draw_polygon_filled(
                 [(x - size//2 - 5, y - size//3), (x + size//2 + 5, y - size//3), (x, y - size - 10)],
                 dark_color
             )
             for i in range(3):
-                arcade.draw_rectangle_filled(
+                draw_rectangle_filled(
                     x - size//2 + i*5 + 10, y + size//3 + i*3,
                     size - i*10, 3, dark_color
                 )
 
         elif icon_type == "temple":
-            arcade.draw_rectangle_filled(x, y, size, size, color)
+            draw_rectangle_filled(x, y, size, size, color)
             arcade.draw_polygon_filled(
                 [(x - size//2 - 3, y - size//2), (x + size//2 + 3, y - size//2), (x, y - size - 5)],
                 dark_color
             )
             for col_x in [x - 12, x, x + 12]:
-                arcade.draw_rectangle_filled(col_x, y, 4, size//2, (200, 200, 200))
+                draw_rectangle_filled(col_x, y, 4, size//2, (200, 200, 200))
 
         elif icon_type == "castle":
-            arcade.draw_rectangle_filled(x, y + size//6, size, size//2 + size//3, color)
+            draw_rectangle_filled(x, y + size//6, size, size//2 + size//3, color)
             arcade.draw_polygon_filled(
                 [(x - size//2 - 3, y - size//3), (x + size//2 + 3, y - size//3), (x, y - size - 5)],
                 dark_color
@@ -955,46 +955,46 @@ class ScenarioView:
             arcade.draw_triangle_filled(x, y - size - 20, x + 10, y - size - 15, x, y - size - 10, (200, 50, 50))
 
         elif icon_type == "market":
-            arcade.draw_rectangle_filled(x, y + size//6, size, size//3, color)
+            draw_rectangle_filled(x, y + size//6, size, size//3, color)
             arcade.draw_polygon_filled(
                 [(x - size//2 - 5, y + size//6), (x + size//2 + 5, y + size//6), (x, y - size//2 + size//6)],
                 dark_color
             )
 
         elif icon_type == "wall":
-            arcade.draw_rectangle_filled(x, y + size//6, size, size//2, color)
+            draw_rectangle_filled(x, y + size//6, size, size//2, color)
             for i in range(5):
-                arcade.draw_rectangle_filled(
+                draw_rectangle_filled(
                     x - size//2 + i*8 + 4, y - size//2 + 4,
                     6, 8, dark_color
                 )
 
         elif icon_type == "battlefield":
-            arcade.draw_rectangle_filled(x, y, size, size//2, color)
+            draw_rectangle_filled(x, y, size, size//2, color)
             arcade.draw_line(x - 10, y - 10, x + 10, y + 10, (200, 200, 200), 3)
             arcade.draw_line(x + 10, y - 10, x - 10, y + 10, (200, 200, 200), 3)
 
         elif icon_type == "port":
-            arcade.draw_rectangle_filled(x, y, size, size//2, color)
+            draw_rectangle_filled(x, y, size, size//2, color)
             arcade.draw_circle_outline(x, y - 5, 6, (200, 200, 200), 2)
             arcade.draw_line(x, y, x, y + 12, (200, 200, 200), 2)
             arcade.draw_line(x - 6, y + 10, x + 6, y + 10, (200, 200, 200), 2)
 
         elif icon_type == "cross":
-            arcade.draw_rectangle_filled(x, y, size, size//2, color)
-            arcade.draw_rectangle_filled(x, y - size//4, 6, size, (255, 255, 255))
+            draw_rectangle_filled(x, y, size, size//2, color)
+            draw_rectangle_filled(x, y - size//4, 6, size, (255, 255, 255))
 
         elif icon_type == "tree":
             arcade.draw_circle_filled(x, y - 5, size//3, (60, 179, 113))
-            arcade.draw_rectangle_filled(x, y + size//6, 8, size//3, (139, 90, 43))
+            draw_rectangle_filled(x, y + size//6, 8, size//3, (139, 90, 43))
 
         elif icon_type == "building":
-            arcade.draw_rectangle_filled(x, y + size//6, size, size//2 + size//3, color)
+            draw_rectangle_filled(x, y + size//6, size, size//2 + size//3, color)
             for wx in [x - 8, x, x + 8]:
-                arcade.draw_rectangle_filled(wx, y - size//4, 6, 8, (200, 220, 255))
+                draw_rectangle_filled(wx, y - size//4, 6, 8, (200, 220, 255))
 
         else:
-            arcade.draw_rectangle_filled(x, y + size//6, size, size//2 + size//6, color)
+            draw_rectangle_filled(x, y + size//6, size, size//2 + size//6, color)
             arcade.draw_polygon_filled(
                 [(x - size//2 - 2, y - size//3), (x + size//2 + 2, y - size//3), (x, y - size - 5)],
                 dark_color
@@ -1068,10 +1068,10 @@ class ScenarioView:
         bg_color = (255, 255, 255, alpha)
 
         # 背景
-        arcade.draw_rectangle_filled(x, y - 40, box_width, box_height, bg_color)
+        draw_rectangle_filled(x, y - 40, box_width, box_height, bg_color)
 
         # 边框
-        arcade.draw_rectangle_outline(x, y - 40, box_width, box_height, dialog.agent_color, 2)
+        draw_rectangle_outline(x, y - 40, box_width, box_height, dialog.agent_color, 2)
 
         # 名称
         name_color = (50, 50, 50) if dialog.opacity > 200 else (100, 100, 100)
@@ -1113,7 +1113,7 @@ class ScenarioView:
         panel_x = self.map_width
 
         # 背景
-        arcade.draw_rectangle_filled(
+        draw_rectangle_filled(
             panel_x + self.panel_width // 2, self.height // 2,
             self.panel_width, self.height - self.header_height - self.control_bar_height,
             self.panel_bg_color
@@ -1153,7 +1153,7 @@ class ScenarioView:
         y_offset = self.height - 125
 
         # 开关容器背景
-        arcade.draw_rectangle_filled(
+        draw_rectangle_filled(
             panel_x + self.panel_width // 2, y_offset + 17,
             self.panel_width - 30, 35,
             (50, 54, 62)
@@ -1174,7 +1174,7 @@ class ScenarioView:
         toggle_y = y_offset + 6
 
         bg_color = (70, 130, 180) if self.show_agent_details else (80, 80, 80)
-        arcade.draw_rectangle_filled(
+        draw_rectangle_filled(
             toggle_x + toggle_width // 2, toggle_y + toggle_height // 2,
             toggle_width, toggle_height,
             bg_color
@@ -1206,7 +1206,7 @@ class ScenarioView:
         col_names = ["名称", "MBTI", "心情", "时间", "社交", "体力", "位置"]
 
         # 表头背景
-        arcade.draw_rectangle_filled(
+        draw_rectangle_filled(
             panel_x + self.panel_width // 2, y_offset + 10,
             self.panel_width - 20, 25,
             (40, 44, 52)
@@ -1232,14 +1232,14 @@ class ScenarioView:
             bg_color = (50, 60, 75) if is_selected else (45, 50, 58)
 
             # 行背景
-            arcade.draw_rectangle_filled(
+            draw_rectangle_filled(
                 panel_x + self.panel_width // 2, y_offset + row_height // 2,
                 self.panel_width - 20, row_height,
                 bg_color
             )
 
             if is_selected:
-                arcade.draw_rectangle_outline(
+                draw_rectangle_outline(
                     panel_x + self.panel_width // 2, y_offset + row_height // 2,
                     self.panel_width - 20, row_height,
                     self.accent_color, 1
@@ -1393,7 +1393,7 @@ class ScenarioView:
             bar_width = bar_max_width
             bar_height = 8
 
-            arcade.draw_rectangle_filled(
+            draw_rectangle_filled(
                 bar_x + bar_width // 2, y_offset + 4,
                 bar_width, bar_height,
                 (50, 54, 62)
@@ -1409,7 +1409,7 @@ class ScenarioView:
             else:
                 fill_width = int((w_value + 1) / 2 * bar_width) if w_value >= 0 else 0
                 if fill_width > 0:
-                    arcade.draw_rectangle_filled(
+                    draw_rectangle_filled(
                         bar_x + fill_width // 2, y_offset + 4,
                         max(0, fill_width), bar_height,
                         w_color
@@ -1496,7 +1496,7 @@ class ScenarioView:
             )
             y_offset += 16
 
-            arcade.draw_rectangle_filled(
+            draw_rectangle_filled(
                 panel_content_x + panel_width // 2, y_offset + 12,
                 panel_width, 30,
                 (50, 54, 62)
@@ -1558,7 +1558,7 @@ class ScenarioView:
     def _draw_control_bar(self):
         """绘制底部控制栏"""
         # 背景
-        arcade.draw_rectangle_filled(
+        draw_rectangle_filled(
             self.width // 2, self.control_bar_height // 2,
             self.width, self.control_bar_height,
             (35, 38, 45)
@@ -1600,14 +1600,14 @@ class ScenarioView:
             box_y = self.height - 150 - i * 70
 
             # 背景
-            arcade.draw_rectangle_filled(
+            draw_rectangle_filled(
                 box_x + box_width // 2, box_y + box_height // 2,
                 box_width, box_height,
                 (40, 44, 52, alpha)
             )
 
             # 边框
-            arcade.draw_rectangle_outline(
+            draw_rectangle_outline(
                 box_x + box_width // 2, box_y + box_height // 2,
                 box_width, box_height,
                 self.accent_color + (alpha,),
@@ -1625,7 +1625,7 @@ class ScenarioView:
     def _draw_loading_overlay(self):
         """绘制加载覆盖层"""
         # 半透明黑色背景
-        arcade.draw_rectangle_filled(
+        draw_rectangle_filled(
             self.width // 2, self.height // 2,
             self.width, self.height,
             (0, 0, 0, 180)
