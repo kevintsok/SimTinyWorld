@@ -51,6 +51,11 @@ class SimulationController:
         self.height = height
         self.fast_mode = fast_mode
 
+        # 连接绘制回调
+        self.window.on_draw = self.on_draw
+        self.window.on_mouse_press = self.on_mouse_press
+        self.window.on_mouse_motion = self.on_mouse_motion
+
         # Session管理器
         self.session_manager = SessionManager()
         self.current_session_id: Optional[str] = None
