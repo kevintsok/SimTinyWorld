@@ -1652,6 +1652,29 @@ class ScenarioView:
     # Event Handling
     # ========================================================================
 
+    def handle_event(self, event: dict) -> Optional[str]:
+        """处理事件的通用入口
+
+        Args:
+            event: 事件字典，包含 type, x, y, button 等
+
+        Returns:
+            Optional[str]: 操作类型
+        """
+        event_type = event.get("type")
+        if event_type == "mouse_press":
+            return self.handle_mouse_press(
+                event.get("x", 0),
+                event.get("y", 0),
+                event.get("button", arcade.MOUSE_BUTTON_LEFT)
+            )
+        elif event_type == "key_press":
+            return self.handle_key_press(
+                event.get("key", 0),
+                event.get("modifiers", 0)
+            )
+        return None
+
     def handle_mouse_press(self, x: float, y: float, button: int = arcade.MOUSE_BUTTON_LEFT) -> Optional[str]:
         """处理鼠标点击事件
 
