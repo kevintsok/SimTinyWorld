@@ -132,8 +132,8 @@ class Button:
         # Draw text
         arcade.draw_text(
             text=self.text,
-            start_x=self.x + self.width / 2,
-            start_y=self.y + self.height / 2,
+            x=self.x + self.width / 2,
+            y=self.y + self.height / 2,
             color=self.text_color,
             font_size=self.font_size,
             anchor_x="center",
@@ -215,8 +215,8 @@ class Panel:
             # Title text
             arcade.draw_text(
                 text=self.title,
-                start_x=self.x + 10,
-                start_y=self.y + self.height - self.title_height + 8,
+                x=self.x + 10,
+                y=self.y + self.height - self.title_height + 8,
                 color=self.title_color,
                 font_size=14,
                 font_name="arial",
@@ -322,8 +322,8 @@ class TextBox:
 
         arcade.draw_text(
             text=display_text,
-            start_x=self.x + 10,
-            start_y=self.y + self.height / 2,
+            x=self.x + 10,
+            y=self.y + self.height / 2,
             color=text_color,
             font_size=self.font_size,
             anchor_y="center",
@@ -336,8 +336,8 @@ class TextBox:
             text_width = len(self.text) * (self.font_size * 0.6)
             cursor_x = self.x + 10 + text_width + 2
             arcade.draw_line(
-                start_x=cursor_x,
-                start_y=self.y + 5,
+                x=cursor_x,
+                y=self.y + 5,
                 end_x=cursor_x,
                 end_y=self.y + self.height - 5,
                 color=self.text_color,
@@ -448,8 +448,8 @@ class Dropdown:
         text = self.options[self.selected_index] if self.options else ""
         arcade.draw_text(
             text=text,
-            start_x=self.x + 10,
-            start_y=self.y + self.height / 2,
+            x=self.x + 10,
+            y=self.y + self.height / 2,
             color=self.text_color,
             font_size=self.font_size,
             anchor_y="center",
@@ -483,8 +483,8 @@ class Dropdown:
 
                 arcade.draw_text(
                     text=option,
-                    start_x=self.x + 10,
-                    start_y=opt_y + self.option_height / 2,
+                    x=self.x + 10,
+                    y=opt_y + self.option_height / 2,
                     color=self.text_color,
                     font_size=self.font_size,
                     anchor_y="center",
@@ -494,8 +494,8 @@ class Dropdown:
                 # Draw separator line
                 if i < len(self.options) - 1:
                     arcade.draw_line(
-                        start_x=self.x,
-                        start_y=opt_y,
+                        x=self.x,
+                        y=opt_y,
                         end_x=self.x + self.width,
                         end_y=opt_y,
                         color=COLORS["border"],
@@ -589,8 +589,8 @@ class Label:
         """Draw the label"""
         arcade.draw_text(
             text=self.text,
-            start_x=self.x,
-            start_y=self.y,
+            x=self.x,
+            y=self.y,
             color=self.color,
             font_size=self.font_size,
             anchor_y=self.anchor_y,
@@ -666,8 +666,8 @@ class Checkbox:
         if self.label:
             arcade.draw_text(
                 text=self.label,
-                start_x=self.x + self.size + 8,
-                start_y=self.y + self.size / 2,
+                x=self.x + self.size + 8,
+                y=self.y + self.size / 2,
                 color=self.text_color,
                 font_size=self.font_size,
                 anchor_y="center",
