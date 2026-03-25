@@ -594,26 +594,20 @@ class DailyLifeScenario(BaseScenario):
                 with self.agent_locks.get(speaker.id, self.global_lock):
                     history = conversation_history[-4:] if conversation_history else []
                     if hasattr(speaker, 'think'):
-                        # 使用超时机制避免长时间阻塞
-                        import signal
-                        def timeout_handler(signum, frame):
-                            raise TimeoutError("LLM调用超时")
+                        # 使用线程超时机制避免长时间阻塞（signal.SIGALRM在macOS上不可靠）
+                        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
-                        # 设置10秒超时
-                        signal.signal(signal.SIGALRM, timeout_handler)
-                        signal.alarm(10)
+                        def call_think():
+                            return speaker.think(query, history=history)
 
                         try:
-                            result = speaker.think(query, history=history)
-                            signal.alarm(0)  # 取消超时
-                            return result
-                        except TimeoutError:
-                            signal.alarm(0)
-                            print(f"{speaker.name} 的LLM调用超时，使用默认回复")
+                            with ThreadPoolExecutor(max_workers=1) as executor:
+                                future = executor.submit(call_think)
+                                result = future.result(timeout=10.0)
+                                return result
+                        except FuturesTimeoutError:
+                            print(f"{speaker.name} 的LLM调用超时（10秒），使用默认回复")
                             return "（沉默了一会儿）..."
-                        except Exception as e:
-                            signal.alarm(0)
-                            raise
                     return ""
         except Exception as e:
             print(f"对话响应出错: {e}")
