@@ -288,6 +288,7 @@ class ScenarioView:
         self.header_height = 50
         self.timeline_height = 60
         self.control_bar_height = 50
+        self.detail_top_margin = 80  # 详情面板与智能体列表的间距
 
         # 加载状态
         self.loading_text: str = ""
@@ -1160,13 +1161,21 @@ class ScenarioView:
         self._draw_detail_toggle(panel_x)
 
         # 智能体列表
-        self._draw_agent_list(panel_x)
+        list_end_y = self._draw_agent_list(panel_x)
+
+        # 智能体列表与详情的分隔线
+        separator_y = list_end_y - self.detail_top_margin // 2
+        arcade.draw_line(
+            panel_x, separator_y,
+            self.width, separator_y,
+            (60, 64, 72), 1
+        )
 
         # 选中智能体详情
         if self.selected_agent_id and self.selected_agent_id in self.agents:
             agent = self.agents[self.selected_agent_id]
             if self.show_agent_details:
-                self._draw_agent_detail(panel_x, agent)
+                self._draw_agent_detail(panel_x, agent, list_end_y)
             else:
                 self._draw_agent_detail_compact(panel_x, agent)
 
@@ -1302,6 +1311,8 @@ class ScenarioView:
             if y_offset > self.height - 280:
                 break
 
+        return y_offset
+
     def _get_mood_text(self, mood_value: float) -> str:
         """根据心情值返回文本"""
         if mood_value > 0.5:
@@ -1334,9 +1345,11 @@ class ScenarioView:
             lines.append(current_line)
         return lines if lines else [""]
 
-    def _draw_agent_detail(self, panel_x: int, agent: AgentVisual):
+    def _draw_agent_detail(self, panel_x: int, agent: AgentVisual, list_end_y: int = None):
         """绘制智能体详情（完整版）"""
-        detail_start_y = self.height - 340
+        if list_end_y is None:
+            list_end_y = self.height - 280
+        detail_start_y = list_end_y - self.detail_top_margin
         panel_width = self.panel_width - 40
         panel_content_x = panel_x + 20
 
