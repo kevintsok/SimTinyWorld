@@ -445,8 +445,15 @@ class ScenarioView:
             "participants": participants or []
         })
         if len(self.events) > 100:
+            old_len = len(self.events)
             self.events = self.events[-100:]
-            self.triggered_events.clear()
+            # Adjust triggered indices to new positions
+            new_triggered = set()
+            for idx in self.triggered_events:
+                new_idx = idx - (old_len - 100)
+                if new_idx >= 0:
+                    new_triggered.add(new_idx)
+            self.triggered_events = new_triggered
 
     def set_round(self, round_num: int):
         """设置当前轮数"""

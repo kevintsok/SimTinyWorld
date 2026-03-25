@@ -480,16 +480,19 @@ class SimulationController:
             if self.is_step_running:
                 return
             self.is_step_running = True
+            started_event = threading.Event()
 
         self._step_thread = threading.Thread(
             target=self._simulate_step_worker,
-            args=(),
+            args=(started_event,),
             daemon=True
         )
         self._step_thread.start()
+        started_event.wait()  # Wait for thread to actually start
 
-    def _simulate_step_worker(self):
+    def _simulate_step_worker(self, started_event: threading.Event):
         """后台线程执行模拟步骤"""
+        started_event.set()  # Signal that thread has started
         try:
             if self.scenario:
                 step = self.current_step + 1
